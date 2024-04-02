@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics Test</title>
+</head>
+<body>
+    <h1>Analytics Test Page</h1>
+    <p>This is a test page for the analytics system.</p>
+    <a href="https://www.example.com" target="_blank">External Link</a>
+
+    <script>
+        // 페이지뷰 데이터 전송
+        fetch('http://127.0.0.1:8000/collect/pageview', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({url: window.location.href})
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => console.log(data))
+        .catch(error => console.error('Error:', error));
+
+        // 앵커 클릭 이벤트 리스너 등록
+        document.addEventListener('click', function(event) {
+            if (event.target.tagName === 'A') {
+                
+                const source_url = window.location.href;
+                const target_url = event.target.href;
+
+                fetch('http://127.0.0.1:8000/collect/anchor-click', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({source_url, target_url})
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => console.log(data))
+                .catch(error => console.error('Error:', error));
+            }
+        });
+    </script>
+</body>
+</html>
