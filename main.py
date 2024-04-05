@@ -6,8 +6,9 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from user_agents import parse
 from geoip2.database import Reader
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
+from typing import Optional
 
 
 app = FastAPI()
@@ -129,3 +130,225 @@ async def collect_anchor_click(
     db.commit()
 
     return {"status": "success", "message": "Anchor click data collected successfully"}
+
+
+def get_date_range(date_start: str, date_end: str, interval: str):
+    start_date = datetime.strptime(date_start, "%Y%m%d")
+    end_date = datetime.strptime(date_end, "%Y%m%d")
+
+    if interval == "daily":
+        return start_date, end_date
+    elif interval == "weekly":
+        start_date = start_date - timedelta(days=start_date.weekday())
+        end_date = end_date - timedelta(days=end_date.weekday()) + timedelta(days=6)
+    elif interval == "monthly":
+        start_date = start_date.replace(day=1)
+        end_date = end_date.replace(day=1) + timedelta(days=32)
+        end_date = end_date.replace(day=1) - timedelta(days=1)
+
+    return start_date, end_date
+
+
+@app.get("/analytics/pageviews")
+def get_pageviews(
+    url: str,
+    date_start: str,
+    date_end: str,
+    interval: str = "daily",
+    db: SessionLocal = Depends(get_db),
+):
+    start_date, end_date = get_date_range(date_start, date_end, interval)
+
+    pageviews = (
+        db.query(Pageview)
+        .filter(
+            Pageview.url.like(f"%{url}%"),
+            Pageview.timestamp >= start_date,
+            Pageview.timestamp <= end_date,
+        )
+        .all()
+    )
+
+    # 데이터 가공
+    processed_data = {
+        "total_pageviews": len(pageviews),
+        "data": {},
+    }
+
+    # 일일, 주간, 월간별 데이터 계산
+    current_date = start_date
+    while current_date <= end_date:
+        if interval == "daily":
+            next_date = current_date + timedelta(days=1)
+        elif interval == "weekly":
+            next_date = current_date + timedelta(days=7)
+        elif interval == "monthly":
+            next_date = current_date.replace(day=28) + timedelta(days=4)
+            next_date = next_date.replace(day=1)
+
+        filtered_pageviews = [
+            p for p in pageviews if current_date <= p.timestamp < next_date
+        ]
+
+        # 데이터가 있는 경우에만 처리
+        if filtered_pageviews:
+
+            if interval == "daily":
+                date_key = current_date.strftime("%Y%m%d")
+            elif interval == "weekly":
+                date_key = f"{current_date.strftime('%Y%m%d')}-{(next_date - timedelta(days=1)).strftime('%Y%m%d')}"
+            elif interval == "monthly":
+                date_key = current_date.strftime("%Y%m")
+
+            processed_data["data"][date_key] = {
+                "pageviews_by_location": {},
+                "pageviews_by_device": {
+                    "mobile": sum(p.is_mobile for p in filtered_pageviews),
+                    "pc": sum(p.is_pc for p in filtered_pageviews),
+                },
+                "pageviews_by_os": {},
+                "pageviews_by_browser": {},
+            }
+
+            # 지역별 페이지뷰 수 계산
+            for pageview in filtered_pageviews:
+                if (
+                    pageview.user_location
+                    not in processed_data["data"][date_key]["pageviews_by_location"]
+                ):
+                    processed_data["data"][date_key]["pageviews_by_location"][
+                        pageview.user_location
+                    ] = 0
+                processed_data["data"][date_key]["pageviews_by_location"][
+                    pageview.user_location
+                ] += 1
+
+            # OS별 페이지뷰 수 계산
+            for pageview in filtered_pageviews:
+                user_agent = parse(pageview.user_agent)
+                os_family = user_agent.os.family
+                if os_family not in processed_data["data"][date_key]["pageviews_by_os"]:
+                    processed_data["data"][date_key]["pageviews_by_os"][os_family] = 0
+                processed_data["data"][date_key]["pageviews_by_os"][os_family] += 1
+
+            # 브라우저별 페이지뷰 수 계산
+            for pageview in filtered_pageviews:
+                user_agent = parse(pageview.user_agent)
+                browser_family = user_agent.browser.family
+                if (
+                    browser_family
+                    not in processed_data["data"][date_key]["pageviews_by_browser"]
+                ):
+                    processed_data["data"][date_key]["pageviews_by_browser"][
+                        browser_family
+                    ] = 0
+                processed_data["data"][date_key]["pageviews_by_browser"][
+                    browser_family
+                ] += 1
+
+        current_date = next_date
+
+    return processed_data
+
+
+@app.get("/analytics/anchor-clicks")
+def get_anchor_clicks(
+    source_url: str,
+    target_url: Optional[str] = None,
+    date_start: str = "",
+    date_end: str = "",
+    interval: str = "daily",
+    db: SessionLocal = Depends(get_db),
+):
+    query = db.query(AnchorClick).filter(AnchorClick.source_url.like(f"%{source_url}%"))
+
+    if target_url:
+        query = query.filter(AnchorClick.target_url.like(f"%{target_url}%"))
+
+    if date_start and date_end:
+        start_date, end_date = get_date_range(date_start, date_end, interval)
+        query = query.filter(
+            AnchorClick.timestamp >= start_date, AnchorClick.timestamp <= end_date
+        )
+
+    anchor_clicks = query.all()
+
+    # 데이터 가공
+    processed_data = {
+        "total_clicks": len(anchor_clicks),
+        "data": {},
+    }
+
+    # 일일, 주간, 월간별 데이터 계산
+    current_date = start_date
+    while current_date <= end_date:
+        if interval == "daily":
+            next_date = current_date + timedelta(days=1)
+        elif interval == "weekly":
+            next_date = current_date + timedelta(days=7)
+        elif interval == "monthly":
+            next_date = current_date.replace(day=28) + timedelta(days=4)
+            next_date = next_date.replace(day=1)
+
+        filtered_clicks = [
+            c for c in anchor_clicks if current_date <= c.timestamp < next_date
+        ]
+
+        # 데이터가 있는 경우에만 처리
+        if filtered_clicks:
+            if interval == "daily":
+                date_key = current_date.strftime("%Y%m%d")
+            elif interval == "weekly":
+                date_key = f"{current_date.strftime('%Y%m%d')}-{(next_date - timedelta(days=1)).strftime('%Y%m%d')}"
+            elif interval == "monthly":
+                date_key = current_date.strftime("%Y%m")
+
+            processed_data["data"][date_key] = {
+                "clicks_by_target_url": {},
+                "clicks_by_device": {
+                    "mobile": sum(c.is_mobile for c in filtered_clicks),
+                    "pc": sum(c.is_pc for c in filtered_clicks),
+                },
+                "clicks_by_os": {},
+                "clicks_by_browser": {},
+            }
+
+            # 도착 URL별 클릭 수 계산
+            for click in filtered_clicks:
+                if (
+                    click.target_url
+                    not in processed_data["data"][date_key]["clicks_by_target_url"]
+                ):
+                    processed_data["data"][date_key]["clicks_by_target_url"][
+                        click.target_url
+                    ] = 0
+                processed_data["data"][date_key]["clicks_by_target_url"][
+                    click.target_url
+                ] += 1
+
+            # OS별 클릭 수 계산
+            for click in filtered_clicks:
+                user_agent = parse(click.user_agent)
+                os_family = user_agent.os.family
+                if os_family not in processed_data["data"][date_key]["clicks_by_os"]:
+                    processed_data["data"][date_key]["clicks_by_os"][os_family] = 0
+                processed_data["data"][date_key]["clicks_by_os"][os_family] += 1
+
+            # 브라우저별 클릭 수 계산
+            for click in filtered_clicks:
+                user_agent = parse(click.user_agent)
+                browser_family = user_agent.browser.family
+                if (
+                    browser_family
+                    not in processed_data["data"][date_key]["clicks_by_browser"]
+                ):
+                    processed_data["data"][date_key]["clicks_by_browser"][
+                        browser_family
+                    ] = 0
+                processed_data["data"][date_key]["clicks_by_browser"][
+                    browser_family
+                ] += 1
+
+        current_date = next_date
+
+    return processed_data
