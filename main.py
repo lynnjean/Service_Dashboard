@@ -105,8 +105,8 @@ async def collect_pageview(
         is_mobile=int(user_agent.is_mobile),
         is_pc=int(user_agent.is_pc),
     )
-    db.add(pageview)
-    db.commit()
+    await db.add(pageview)
+    await db.commit()
 
     return {"status": "success", "message": "Pageview data collected successfully"}
 
@@ -149,7 +149,7 @@ def get_date_range(date_start: str, date_end: str, interval: str):
 
 
 @app.get("/analytics/pageviews")
-def get_pageviews(
+async def get_pageviews(
         url: str,
         date_start: str,
         date_end: str,
@@ -158,7 +158,7 @@ def get_pageviews(
 ):
     start_date, end_date = get_date_range(date_start, date_end, interval)
 
-    pageviews = (
+    pageviews = await (
         db.query(Pageview)
         .filter(
             Pageview.url.like(f"%{url}%"),
@@ -251,7 +251,7 @@ def get_pageviews(
 
 
 @app.get("/analytics/anchor-clicks")
-def get_anchor_clicks(
+async def get_anchor_clicks(
         source_url: str,
         target_url: Optional[str] = None,
         date_start: str = "",
@@ -270,7 +270,7 @@ def get_anchor_clicks(
             AnchorClick.timestamp >= start_date, AnchorClick.timestamp <= end_date
         )
 
-    anchor_clicks = query.all()
+    anchor_clicks = await query.all()
 
     # 데이터 가공
     processed_data = {
