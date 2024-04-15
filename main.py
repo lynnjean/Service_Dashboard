@@ -125,8 +125,8 @@ async def collect_anchor_click(
         is_mobile=int(user_agent.is_mobile),
         is_pc=int(user_agent.is_pc),
     )
-    db.add(anchor_click)
-    db.commit()
+    await db.add(anchor_click)
+    await db.commit()
 
     return {"status": "success", "message": "Anchor click data collected successfully"}
 
