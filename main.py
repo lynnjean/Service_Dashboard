@@ -10,7 +10,6 @@ from datetime import datetime, timedelta
 import pytz
 from typing import Optional
 
-
 app = FastAPI()
 
 app.add_middleware(
@@ -84,7 +83,7 @@ class AnchorClickData(BaseModel):
 
 @app.post("/collect/pageview")
 async def collect_pageview(
-    request: Request, data: PageviewData, db: SessionLocal = Depends(get_db)
+        request: Request, data: PageviewData, db: SessionLocal = Depends(get_db)
 ):
     # User Agent 정보 파싱
     user_agent_string = request.headers.get("User-Agent")
@@ -114,7 +113,7 @@ async def collect_pageview(
 
 @app.post("/collect/anchor-click")
 async def collect_anchor_click(
-    request: Request, data: AnchorClickData, db: SessionLocal = Depends(get_db)
+        request: Request, data: AnchorClickData, db: SessionLocal = Depends(get_db)
 ):
     user_agent_string = request.headers.get("User-Agent")
     user_agent = parse(user_agent_string)
@@ -151,11 +150,11 @@ def get_date_range(date_start: str, date_end: str, interval: str):
 
 @app.get("/analytics/pageviews")
 def get_pageviews(
-    url: str,
-    date_start: str,
-    date_end: str,
-    interval: str = "daily",
-    db: SessionLocal = Depends(get_db),
+        url: str,
+        date_start: str,
+        date_end: str,
+        interval: str = "daily",
+        db: SessionLocal = Depends(get_db),
 ):
     start_date, end_date = get_date_range(date_start, date_end, interval)
 
@@ -213,8 +212,8 @@ def get_pageviews(
             # 지역별 페이지뷰 수 계산
             for pageview in filtered_pageviews:
                 if (
-                    pageview.user_location
-                    not in processed_data["data"][date_key]["pageviews_by_location"]
+                        pageview.user_location
+                        not in processed_data["data"][date_key]["pageviews_by_location"]
                 ):
                     processed_data["data"][date_key]["pageviews_by_location"][
                         pageview.user_location
@@ -236,8 +235,8 @@ def get_pageviews(
                 user_agent = parse(pageview.user_agent)
                 browser_family = user_agent.browser.family
                 if (
-                    browser_family
-                    not in processed_data["data"][date_key]["pageviews_by_browser"]
+                        browser_family
+                        not in processed_data["data"][date_key]["pageviews_by_browser"]
                 ):
                     processed_data["data"][date_key]["pageviews_by_browser"][
                         browser_family
@@ -253,12 +252,12 @@ def get_pageviews(
 
 @app.get("/analytics/anchor-clicks")
 def get_anchor_clicks(
-    source_url: str,
-    target_url: Optional[str] = None,
-    date_start: str = "",
-    date_end: str = "",
-    interval: str = "daily",
-    db: SessionLocal = Depends(get_db),
+        source_url: str,
+        target_url: Optional[str] = None,
+        date_start: str = "",
+        date_end: str = "",
+        interval: str = "daily",
+        db: SessionLocal = Depends(get_db),
 ):
     query = db.query(AnchorClick).filter(AnchorClick.source_url.like(f"%{source_url}%"))
 
@@ -316,8 +315,8 @@ def get_anchor_clicks(
             # 도착 URL별 클릭 수 계산
             for click in filtered_clicks:
                 if (
-                    click.target_url
-                    not in processed_data["data"][date_key]["clicks_by_target_url"]
+                        click.target_url
+                        not in processed_data["data"][date_key]["clicks_by_target_url"]
                 ):
                     processed_data["data"][date_key]["clicks_by_target_url"][
                         click.target_url
@@ -339,8 +338,8 @@ def get_anchor_clicks(
                 user_agent = parse(click.user_agent)
                 browser_family = user_agent.browser.family
                 if (
-                    browser_family
-                    not in processed_data["data"][date_key]["clicks_by_browser"]
+                        browser_family
+                        not in processed_data["data"][date_key]["clicks_by_browser"]
                 ):
                     processed_data["data"][date_key]["clicks_by_browser"][
                         browser_family
@@ -352,3 +351,9 @@ def get_anchor_clicks(
         current_date = next_date
 
     return processed_data
+
+
+# health check
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
