@@ -105,8 +105,8 @@ async def collect_pageview(
         is_mobile=int(user_agent.is_mobile),
         is_pc=int(user_agent.is_pc),
     )
-    await db.add(pageview)
-    await db.commit()
+    db.add(pageview)
+    db.commit()
 
     return {"status": "success", "message": "Pageview data collected successfully"}
 
@@ -125,8 +125,8 @@ async def collect_anchor_click(
         is_mobile=int(user_agent.is_mobile),
         is_pc=int(user_agent.is_pc),
     )
-    await db.add(anchor_click)
-    await db.commit()
+    db.add(anchor_click)
+    db.commit()
 
     return {"status": "success", "message": "Anchor click data collected successfully"}
 
@@ -158,7 +158,7 @@ async def get_pageviews(
 ):
     start_date, end_date = get_date_range(date_start, date_end, interval)
 
-    pageviews = await (
+    pageviews = (
         db.query(Pageview)
         .filter(
             Pageview.url.like(f"%{url}%"),
@@ -270,7 +270,7 @@ async def get_anchor_clicks(
             AnchorClick.timestamp >= start_date, AnchorClick.timestamp <= end_date
         )
 
-    anchor_clicks = await query.all()
+    anchor_clicks = query.all()
 
     # 데이터 가공
     processed_data = {
