@@ -113,7 +113,7 @@ async def collect_pageview(
         db.add(pageview)
         db.commit()
     except Exception as e:
-        logger.log(logging.ERROR, f"Error: {e}")
+        logger.log(logging.DEBUG, f"Error: {e}")
     return {"status": "success", "message": "Pageview data collected successfully"}
 
 
