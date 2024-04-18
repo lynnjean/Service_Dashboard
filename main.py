@@ -11,6 +11,9 @@ import pytz
 from typing import Optional
 
 app = FastAPI()
+import logging
+
+logger = logging.getLogger(__name__)
 
 app.add_middleware(
     CORSMiddleware,
@@ -85,29 +88,31 @@ class AnchorClickData(BaseModel):
 async def collect_pageview(
         request: Request, data: PageviewData, db: SessionLocal = Depends(get_db)
 ):
-    # User Agent 정보 파싱
-    user_agent_string = request.headers.get("User-Agent")
-    user_agent = parse(user_agent_string)
-
-    # IP 주소로 지역 정보 파싱
-    client_ip = request.client.host
     try:
-        response = reader.city(client_ip)
-        user_location = f"{response.city.name}, {response.country.name}"
-    except:
-        user_location = "Unknown"
+        # User Agent 정보 파싱
+        user_agent_string = request.headers.get("User-Agent")
+        user_agent = parse(user_agent_string)
 
-    # 데이터베이스에 정보 저장
-    pageview = Pageview(
-        url=data.url,
-        user_location=user_location,
-        user_agent=user_agent_string,
-        is_mobile=int(user_agent.is_mobile),
-        is_pc=int(user_agent.is_pc),
-    )
-    db.add(pageview)
-    db.commit()
+        # IP 주소로 지역 정보 파싱
+        client_ip = request.client.host
+        try:
+            response = reader.city(client_ip)
+            user_location = f"{response.city.name}, {response.country.name}"
+        except:
+            user_location = "Unknown"
 
+        # 데이터베이스에 정보 저장
+        pageview = Pageview(
+            url=data.url,
+            user_location=user_location,
+            user_agent=user_agent_string,
+            is_mobile=int(user_agent.is_mobile),
+            is_pc=int(user_agent.is_pc),
+        )
+        db.add(pageview)
+        db.commit()
+    except Exception as e:
+        logger.log(logging.ERROR, f"Error: {e}")
     return {"status": "success", "message": "Pageview data collected successfully"}
 
 
