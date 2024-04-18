@@ -13,7 +13,7 @@
 
     <script>
         // 페이지뷰 데이터 전송
-        fetch('http://127.0.0.1:8000/collect/pageview', {
+        fetch('https://www.analytics.weniv.co.kr/collect/pageview', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -36,7 +36,7 @@
                 const source_url = window.location.href;
                 const target_url = event.target.href;
 
-                fetch('http://127.0.0.1:8000/collect/anchor-click', {
+                fetch('https://www.analytics.weniv.co.kr/collect/anchor-click', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'

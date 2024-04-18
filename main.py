@@ -68,6 +68,7 @@ class AnchorClick(Base):
     user_agent = Column(String)  # 사용자의 User-Agent 정보
     is_mobile = Column(Integer)  # 모바일 기기 여부
     is_pc = Column(Integer)  # PC 기기 여부
+    ip_address = Column(String)
 
 
 # 데이터베이스 테이블 생성
@@ -128,7 +129,7 @@ async def collect_anchor_click(
         target_url=data.target_url,
         user_agent=user_agent_string,
         is_mobile=int(user_agent.is_mobile),
-        is_pc=int(user_agent.is_pc),
+        is_pc=int(user_agent.is_pc)
     )
     db.add(anchor_click)
     db.commit()
