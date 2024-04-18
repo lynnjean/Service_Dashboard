@@ -68,6 +68,7 @@ class AnchorClick(Base):
     user_agent = Column(String)  # 사용자의 User-Agent 정보
     is_mobile = Column(Integer)  # 모바일 기기 여부
     is_pc = Column(Integer)  # PC 기기 여부
+    ip_address = Column(String)
 
 
 # 데이터베이스 테이블 생성
@@ -94,7 +95,11 @@ async def collect_pageview(
         user_agent = parse(user_agent_string)
 
         # IP 주소로 지역 정보 파싱
-        client_ip = request.client.host
+        client_ip = request.headers.get("X-Forwarded-For", request.client.host)
+        if client_ip:
+            client_ip = client_ip.split(",")[0]
+        else:
+            client_ip = request.client.host
         try:
             response = reader.city(client_ip)
             user_location = f"{response.city.name}, {response.country.name}"
@@ -112,7 +117,7 @@ async def collect_pageview(
         db.add(pageview)
         db.commit()
     except Exception as e:
-        logger.log(logging.ERROR, f"Error: {e}")
+        logger.log(logging.DEBUG, f"Error: {e}")
     return {"status": "success", "message": "Pageview data collected successfully"}
 
 
@@ -128,7 +133,7 @@ async def collect_anchor_click(
         target_url=data.target_url,
         user_agent=user_agent_string,
         is_mobile=int(user_agent.is_mobile),
-        is_pc=int(user_agent.is_pc),
+        is_pc=int(user_agent.is_pc)
     )
     db.add(anchor_click)
     db.commit()
