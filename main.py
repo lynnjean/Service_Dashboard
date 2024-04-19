@@ -95,11 +95,11 @@ async def collect_pageview(
         user_agent = parse(user_agent_string)
 
         # IP 주소로 지역 정보 파싱
-        client_ip = request.headers.get("X-Forwarded-For", request.client.host)
+        client_ip = request.headers.get("X-Forwarded-For")
         if client_ip:
-            client_ip = client_ip.split(",")[0]
+            client_ip = client_ip.split(",")[0].strip()
         else:
-            client_ip = request.client.host
+            client_ip = request.client.host if request.client else None
         try:
             response = reader.city(client_ip)
             user_location = f"{response.city.name}, {response.country.name}"
