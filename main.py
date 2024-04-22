@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, Depends
+from fastapi import FastAPI, Request, Depends, Cookie, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, Integer, String, DateTime
@@ -9,9 +9,10 @@ from geoip2.database import Reader
 from datetime import datetime, timedelta
 import pytz
 from typing import Optional
+import secrets
+import logging
 
 app = FastAPI()
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,6 @@ reader = Reader("GeoLite2-City.mmdb")
 # 한국 시간대 설정
 KST = pytz.timezone("Asia/Seoul")
 
-
 # 데이터베이스 종속성
 def get_db():
     db = SessionLocal()
@@ -46,6 +46,9 @@ def get_db():
     finally:
         db.close()
 
+# 세션 ID 생성 함수
+def generate_session_id():
+    return secrets.token_urlsafe(16)  # 16바이트 길이의 무작위 문자열 생성
 
 # 모델 정의
 class Pageview(Base):
@@ -53,6 +56,8 @@ class Pageview(Base):
     id = Column(Integer, primary_key=True, index=True)
     timestamp = Column(DateTime, default=lambda: datetime.now(KST))
     url = Column(String)  # 사용자가 접속한 URL
+    ip_address = Column(String) # 사용자 IP
+    session_id = Column(String) # 사용자 session ID
     user_location = Column(String)  # 사용자의 지역 정보
     user_agent = Column(String)  # 사용자의 User-Agent 정보
     is_mobile = Column(Integer)  # 모바일 기기 여부
@@ -65,11 +70,11 @@ class AnchorClick(Base):
     timestamp = Column(DateTime, default=lambda: datetime.now(KST))
     source_url = Column(String)  # 사용자가 클릭한 링크의 출발 URL
     target_url = Column(String)  # 사용자가 클릭한 링크의 도착 URL
+    ip_address = Column(String) # 사용자 IP
+    session_id = Column(String) # 사용자 session ID
     user_agent = Column(String)  # 사용자의 User-Agent 정보
     is_mobile = Column(Integer)  # 모바일 기기 여부
     is_pc = Column(Integer)  # PC 기기 여부
-    ip_address = Column(String)
-
 
 # 데이터베이스 테이블 생성
 Base.metadata.create_all(bind=engine)
@@ -79,15 +84,17 @@ Base.metadata.create_all(bind=engine)
 class PageviewData(BaseModel):
     url: str
 
-
 class AnchorClickData(BaseModel):
     source_url: str
     target_url: str
 
+class PageviewData(BaseModel):
+    url: str
 
 @app.post("/collect/pageview")
 async def collect_pageview(
         request: Request, data: PageviewData, db: SessionLocal = Depends(get_db)
+        ,user_agent: str = Header(None),session_id: str = Cookie(None)
 ):
     try:
         # User Agent 정보 파싱
@@ -106,9 +113,15 @@ async def collect_pageview(
         except:
             user_location = "Unknown"
 
+        # 세션 ID가 없는 경우 새로 생성
+        if session_id is None:
+            session_id = generate_session_id()
+
         # 데이터베이스에 정보 저장
         pageview = Pageview(
             url=data.url,
+            ip_address = client_ip,
+            session_id = session_id,
             user_location=user_location,
             user_agent=user_agent_string,
             is_mobile=int(user_agent.is_mobile),
@@ -116,21 +129,42 @@ async def collect_pageview(
         )
         db.add(pageview)
         db.commit()
+
     except Exception as e:
         logger.log(logging.DEBUG, f"Error: {e}")
+
     return {"status": "success", "message": "Pageview data collected successfully"}
 
 
 @app.post("/collect/anchor-click")
 async def collect_anchor_click(
         request: Request, data: AnchorClickData, db: SessionLocal = Depends(get_db)
+        ,user_agent: str = Header(None),session_id: str = Cookie(None)
 ):
     user_agent_string = request.headers.get("User-Agent")
     user_agent = parse(user_agent_string)
 
+    # IP 주소로 지역 정보 파싱
+    client_ip = request.headers.get("X-Forwarded-For")
+    if client_ip:
+        client_ip = client_ip.split(",")[0].strip()
+    else:
+        client_ip = request.client.host if request.client else None
+    try:
+        response = reader.city(client_ip)
+        user_location = f"{response.city.name}, {response.country.name}"
+    except:
+        user_location = "Unknown"
+
+    # 세션 ID가 없는 경우 새로 생성
+    if session_id is None:
+        session_id = generate_session_id()
+        
     anchor_click = AnchorClick(
         source_url=data.source_url,
         target_url=data.target_url,
+        ip_address = client_ip,
+        session_id = session_id,
         user_agent=user_agent_string,
         is_mobile=int(user_agent.is_mobile),
         is_pc=int(user_agent.is_pc)
