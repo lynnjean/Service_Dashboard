@@ -133,7 +133,7 @@ async def collect_pageview(
     except Exception as e:
         logger.log(logging.DEBUG, f"Error: {e}")
 
-    return {"status": "success", "message": "Pageview data collected successfully", "session_id" :session_id}
+    return {"status": "success", "message": "Pageview data collected successfully"}
 
 
 @app.post("/collect/anchor-click")
@@ -173,7 +173,7 @@ async def collect_anchor_click(
     db.add(anchor_click)
     db.commit()
 
-    return {"status": "success", "message": "Anchor click data collected successfully", "session_id" :session_id}
+    return {"status": "success", "message": "Anchor click data collected successfully"}
 
 
 def get_date_range(date_start: str, date_end: str, interval: str):
