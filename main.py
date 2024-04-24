@@ -94,7 +94,7 @@ class PageviewData(BaseModel):
 @app.post("/collect/pageview")
 async def collect_pageview(
         request: Request, data: PageviewData, db: SessionLocal = Depends(get_db)
-        ,user_agent: str = Header(None),session_id: str = Cookie(None)
+        ,user_agent: str = Header(None),session_id: str = Header(None)
 ):
     try:
         # User Agent 정보 파싱
@@ -133,13 +133,13 @@ async def collect_pageview(
     except Exception as e:
         logger.log(logging.DEBUG, f"Error: {e}")
 
-    return {"status": "success", "message": "Pageview data collected successfully"}
+    return {"status": "success", "message": "Pageview data collected successfully", "session_id" :session_id}
 
 
 @app.post("/collect/anchor-click")
 async def collect_anchor_click(
         request: Request, data: AnchorClickData, db: SessionLocal = Depends(get_db)
-        ,user_agent: str = Header(None),session_id: str = Cookie(None)
+        ,user_agent: str = Header(None),session_id: str = Header(None,alias="Session-Id")
 ):
     user_agent_string = request.headers.get("User-Agent")
     user_agent = parse(user_agent_string)
@@ -156,10 +156,11 @@ async def collect_anchor_click(
     except:
         user_location = "Unknown"
 
+    session_id = request.headers.get('Session-Id')
     # 세션 ID가 없는 경우 새로 생성
     if session_id is None:
-        session_id = generate_session_id()
-        
+        session_id = generate_session_id()  
+
     anchor_click = AnchorClick(
         source_url=data.source_url,
         target_url=data.target_url,
@@ -172,7 +173,7 @@ async def collect_anchor_click(
     db.add(anchor_click)
     db.commit()
 
-    return {"status": "success", "message": "Anchor click data collected successfully"}
+    return {"status": "success", "message": "Anchor click data collected successfully", "session_id" :session_id}
 
 
 def get_date_range(date_start: str, date_end: str, interval: str):
