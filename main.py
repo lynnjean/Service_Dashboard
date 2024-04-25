@@ -133,8 +133,7 @@ async def collect_pageview(
     except Exception as e:
         logger.log(logging.DEBUG, f"Error: {e}")
 
-    return {"status": "success", "message": "Pageview data collected successfully"}
-
+    return {"status": "success", "message": "Pageview data collected successfully", "session_id":session_id}
 
 @app.post("/collect/anchor-click")
 async def collect_anchor_click(
@@ -175,7 +174,6 @@ async def collect_anchor_click(
 
     return {"status": "success", "message": "Anchor click data collected successfully"}
 
-
 def get_date_range(date_start: str, date_end: str, interval: str):
     start_date = datetime.strptime(date_start, "%Y%m%d")
     end_date = datetime.strptime(date_end, "%Y%m%d")
@@ -208,7 +206,7 @@ async def get_pageviews(
         .filter(
             Pageview.url.like(f"%{url}%"),
             Pageview.timestamp >= start_date,
-            Pageview.timestamp <= end_date,
+            Pageview.timestamp <= end_date.replace(hour=23, minute=59, second=59),
         )
         .all()
     )
@@ -236,7 +234,6 @@ async def get_pageviews(
 
         # 데이터가 있는 경우에만 처리
         if filtered_pageviews:
-
             if interval == "daily":
                 date_key = current_date.strftime("%Y%m%d")
             elif interval == "weekly":
@@ -245,6 +242,7 @@ async def get_pageviews(
                 date_key = current_date.strftime("%Y%m")
 
             processed_data["data"][date_key] = {
+                "num": len(filtered_pageviews),
                 "pageviews_by_location": {},
                 "pageviews_by_device": {
                     "mobile": sum(p.is_mobile for p in filtered_pageviews),
