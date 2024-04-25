@@ -28,13 +28,14 @@
         })
         .then(data => {
             sessionStorage.setItem('session_id', data.session_id)
-            console.log(data)
         })
         .catch(error => console.error('Error:', error));
 
         // 앵커 클릭 이벤트 리스너 등록
         document.addEventListener('click', function(event) {
             if (event.target.tagName === 'A') {
+                event.preventDefault(); // 기본 동작 막기
+
                 var session_id = sessionStorage.getItem('session_id');
 
                 const source_url = window.location.href;
@@ -54,7 +55,9 @@
                     }
                     return response.json();
                 })
-                .then(data => console.log(data))
+                .then(data => {
+                    window.open(target_url, '_self')
+                })
                 .catch(error => console.error('Error:', error));
             }
         });
