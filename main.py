@@ -62,6 +62,7 @@ class Pageview(Base):
     user_agent = Column(String)  # 사용자의 User-Agent 정보
     is_mobile = Column(Integer)  # 모바일 기기 여부
     is_pc = Column(Integer)  # PC 기기 여부
+    referer_url = Column(String) # 이전 url 추가
 
 
 class AnchorClick(Base):
@@ -94,7 +95,7 @@ class PageviewData(BaseModel):
 @app.post("/collect/pageview")
 async def collect_pageview(
         request: Request, data: PageviewData, db: SessionLocal = Depends(get_db)
-        ,user_agent: str = Header(None),session_id: str = Header(None)
+        ,user_agent: str = Header(None),session_id: str = Header(None), referer: str = Header(None)
 ):
     try:
         # User Agent 정보 파싱
@@ -120,6 +121,7 @@ async def collect_pageview(
         # 데이터베이스에 정보 저장
         pageview = Pageview(
             url=data.url,
+            referer_url = referer,
             ip_address = client_ip,
             session_id = session_id,
             user_location=user_location,
@@ -133,7 +135,7 @@ async def collect_pageview(
     except Exception as e:
         logger.log(logging.DEBUG, f"Error: {e}")
 
-    return {"status": "success", "message": "Pageview data collected successfully", "session_id":session_id}
+    return {"status": "success", "message": "Pageview data collected successfully", "session_id":session_id, "referer_url":referer}
 
 @app.post("/collect/anchor-click")
 async def collect_anchor_click(
@@ -156,6 +158,7 @@ async def collect_anchor_click(
         user_location = "Unknown"
 
     session_id = request.headers.get('Session-Id')
+    
     # 세션 ID가 없는 경우 새로 생성
     if session_id is None:
         session_id = generate_session_id()  
