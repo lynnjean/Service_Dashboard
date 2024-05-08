@@ -76,6 +76,7 @@ class AnchorClick(Base):
     user_agent = Column(String)  # 사용자의 User-Agent 정보
     is_mobile = Column(Integer)  # 모바일 기기 여부
     is_pc = Column(Integer)  # PC 기기 여부
+    type = Column(String)
 
 # 데이터베이스 테이블 생성
 Base.metadata.create_all(bind=engine)
@@ -88,9 +89,7 @@ class PageviewData(BaseModel):
 class AnchorClickData(BaseModel):
     source_url: str
     target_url: str
-
-class PageviewData(BaseModel):
-    url: str
+    type:str
 
 @app.post("/collect/pageview")
 async def collect_pageview(
@@ -170,7 +169,8 @@ async def collect_anchor_click(
         session_id = session_id,
         user_agent=user_agent_string,
         is_mobile=int(user_agent.is_mobile),
-        is_pc=int(user_agent.is_pc)
+        is_pc=int(user_agent.is_pc),
+        type = data.type
     )
     db.add(anchor_click)
     db.commit()
