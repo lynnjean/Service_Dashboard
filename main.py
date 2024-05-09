@@ -128,8 +128,9 @@ async def collect_pageview(
             is_mobile=int(user_agent.is_mobile),
             is_pc=int(user_agent.is_pc),
         )
-        db.add(pageview)
-        db.commit()
+        if '127.0.0.1' not in data.url and 'localhost' not in data.url:
+            db.add(pageview)
+            db.commit()
 
     except Exception as e:
         logger.log(logging.DEBUG, f"Error: {e}")
@@ -172,8 +173,10 @@ async def collect_anchor_click(
         is_pc=int(user_agent.is_pc),
         type = data.type
     )
-    db.add(anchor_click)
-    db.commit()
+
+    if '127.0.0.1' not in data.url and 'localhost' not in data.url:
+        db.add(anchor_click)
+        db.commit()
 
     return {"status": "success", "message": "Anchor click data collected successfully"}
 
