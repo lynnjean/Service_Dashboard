@@ -78,9 +78,19 @@ class AnchorClick(Base):
     is_pc = Column(Integer)  # PC 기기 여부
     type = Column(String)
 
+class WenivSqlData(Base):
+    __tablename__ = "wenivsql_data"
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime, default=lambda: datetime.now(KST))
+    contents = Column(String)  # run sql 한 내용
+    ip_address = Column(String) # 사용자 IP
+    session_id = Column(String) # 사용자 session ID
+    user_agent = Column(String)  # 사용자의 User-Agent 정보
+    is_mobile = Column(Integer)  # 모바일 기기 여부
+    is_pc = Column(Integer)  # PC 기기 여부
+
 # 데이터베이스 테이블 생성
 Base.metadata.create_all(bind=engine)
-
 
 # 수집할 데이터의 모델 정의
 class PageviewData(BaseModel):
@@ -90,6 +100,9 @@ class AnchorClickData(BaseModel):
     source_url: str
     target_url: str
     type:str
+
+class WenivSqlData(BaseModel):
+    contents:str
 
 @app.post("/collect/pageview")
 async def collect_pageview(
@@ -180,6 +193,46 @@ async def collect_anchor_click(
 
     return {"status": "success", "message": "Anchor click data collected successfully"}
 
+@app.post("/collect/sql")
+async def collect_sql(
+        request: Request, data: WenivSqlData, db: SessionLocal = Depends(get_db)
+        ,user_agent: str = Header(None),session_id: str = Header(None,alias="Session-Id")
+):
+    user_agent_string = request.headers.get("User-Agent")
+    user_agent = parse(user_agent_string)
+
+    # IP 주소로 지역 정보 파싱
+    client_ip = request.headers.get("X-Forwarded-For")
+    if client_ip:
+        client_ip = client_ip.split(",")[0].strip()
+    else:
+        client_ip = request.client.host if request.client else None
+    try:
+        response = reader.city(client_ip)
+        user_location = f"{response.city.name}, {response.country.name}"
+    except:
+        user_location = "Unknown"
+
+    session_id = request.headers.get('Session-Id')
+    
+    # 세션 ID가 없는 경우 새로 생성
+    if session_id is None:
+        session_id = generate_session_id()  
+
+    sql_data = WenivSqlData(
+        contents=data.contents,
+        ip_address = client_ip,
+        session_id = session_id,
+        user_agent=user_agent_string,
+        is_mobile=int(user_agent.is_mobile),
+        is_pc=int(user_agent.is_pc),
+    )
+
+    db.add(sql_data)
+    db.commit()
+
+    return {"status": "success", "message": "sql data collected successfully"}
+
 def get_date_range(date_start: str, date_end: str, interval: str):
     start_date = datetime.strptime(date_start, "%Y%m%d")
     end_date = datetime.strptime(date_end, "%Y%m%d")
@@ -195,7 +248,6 @@ def get_date_range(date_start: str, date_end: str, interval: str):
         end_date = end_date.replace(day=1) - timedelta(days=1)
 
     return start_date, end_date
-
 
 @app.get("/analytics/pageviews")
 async def get_pageviews(
@@ -298,7 +350,6 @@ async def get_pageviews(
 
     return processed_data
 
-
 @app.get("/analytics/anchor-clicks")
 async def get_anchor_clicks(
         source_url: str,
@@ -400,7 +451,6 @@ async def get_anchor_clicks(
         current_date = next_date
 
     return processed_data
-
 
 # health check
 @app.get("/health")
