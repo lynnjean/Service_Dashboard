@@ -78,7 +78,7 @@ class AnchorClick(Base):
     is_pc = Column(Integer)  # PC 기기 여부
     type = Column(String)
 
-class WenivSqlData(Base):
+class WenivSql(Base):
     __tablename__ = "wenivsql_data"
     id = Column(Integer, primary_key=True, index=True)
     timestamp = Column(DateTime, default=lambda: datetime.now(KST))
@@ -198,38 +198,42 @@ async def collect_sql(
         request: Request, data: WenivSqlData, db: SessionLocal = Depends(get_db)
         ,user_agent: str = Header(None),session_id: str = Header(None,alias="Session-Id")
 ):
-    user_agent_string = request.headers.get("User-Agent")
-    user_agent = parse(user_agent_string)
-
-    # IP 주소로 지역 정보 파싱
-    client_ip = request.headers.get("X-Forwarded-For")
-    if client_ip:
-        client_ip = client_ip.split(",")[0].strip()
-    else:
-        client_ip = request.client.host if request.client else None
     try:
-        response = reader.city(client_ip)
-        user_location = f"{response.city.name}, {response.country.name}"
-    except:
-        user_location = "Unknown"
+        user_agent_string = request.headers.get("User-Agent")
+        user_agent = parse(user_agent_string)
 
-    session_id = request.headers.get('Session-Id')
-    
-    # 세션 ID가 없는 경우 새로 생성
-    if session_id is None:
-        session_id = generate_session_id()  
+        # IP 주소로 지역 정보 파싱
+        client_ip = request.headers.get("X-Forwarded-For")
+        if client_ip:
+            client_ip = client_ip.split(",")[0].strip()
+        else:
+            client_ip = request.client.host if request.client else None
+        try:
+            response = reader.city(client_ip)
+            user_location = f"{response.city.name}, {response.country.name}"
+        except:
+            user_location = "Unknown"
 
-    sql_data = WenivSqlData(
-        contents=data.contents,
-        ip_address = client_ip,
-        session_id = session_id,
-        user_agent=user_agent_string,
-        is_mobile=int(user_agent.is_mobile),
-        is_pc=int(user_agent.is_pc),
-    )
+        session_id = request.headers.get('Session-Id')
+        
+        # 세션 ID가 없는 경우 새로 생성
+        if session_id is None:
+            session_id = generate_session_id()  
 
-    db.add(sql_data)
-    db.commit()
+        sql_data = WenivSql(
+            contents=data.contents,
+            ip_address = client_ip,
+            session_id = session_id,
+            user_agent=user_agent_string,
+            is_mobile=int(user_agent.is_mobile),
+            is_pc=int(user_agent.is_pc),
+        )
+
+        db.add(sql_data)
+        db.commit()
+        
+    except Exception as e:
+        logger.log(logging.DEBUG, f"Error: {e}")
 
     return {"status": "success", "message": "sql data collected successfully"}
 
