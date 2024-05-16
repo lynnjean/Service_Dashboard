@@ -1,9 +1,10 @@
-from fastapi import FastAPI, Request, Depends, Cookie, Header, HTTPException
+from fastapi import FastAPI, Request, Depends, Header # , Cookie, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlalchemy import create_engine, Column, Integer, String, DateTime
+from models import Pageview, AnchorClick, WenivSql, Base
+from sqlalchemy import create_engine # , Column, Integer, String, DateTime
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
+# from sqlalchemy.ext.declarative import declarative_base
 from user_agents import parse
 from geoip2.database import Reader
 from datetime import datetime, timedelta
@@ -13,8 +14,6 @@ import secrets
 import logging
 
 app = FastAPI()
-
-logger = logging.getLogger(__name__)
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,7 +29,9 @@ engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+# Base = declarative_base()
+
+logger = logging.getLogger(__name__)
 
 # GeoIP 데이터베이스 로드
 reader = Reader("GeoLite2-City.mmdb")
@@ -50,44 +51,43 @@ def get_db():
 def generate_session_id():
     return secrets.token_urlsafe(16)  # 16바이트 길이의 무작위 문자열 생성
 
-# 모델 정의
-class Pageview(Base):
-    __tablename__ = "pageviews"
-    id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(DateTime, default=lambda: datetime.now(KST))
-    url = Column(String)  # 사용자가 접속한 URL
-    ip_address = Column(String) # 사용자 IP
-    session_id = Column(String) # 사용자 session ID
-    user_location = Column(String)  # 사용자의 지역 정보
-    user_agent = Column(String)  # 사용자의 User-Agent 정보
-    is_mobile = Column(Integer)  # 모바일 기기 여부
-    is_pc = Column(Integer)  # PC 기기 여부
-    referer_url = Column(String) # 이전 url 추가
+# # 모델 정의
+# class Pageview(Base):
+#     __tablename__ = "pageviews"
+#     id = Column(Integer, primary_key=True, index=True)
+#     timestamp = Column(DateTime, default=lambda: datetime.now(KST))
+#     url = Column(String)  # 사용자가 접속한 URL
+#     ip_address = Column(String) # 사용자 IP
+#     session_id = Column(String) # 사용자 session ID
+#     user_location = Column(String)  # 사용자의 지역 정보
+#     user_agent = Column(String)  # 사용자의 User-Agent 정보
+#     is_mobile = Column(Integer)  # 모바일 기기 여부
+#     is_pc = Column(Integer)  # PC 기기 여부
+#     referer_url = Column(String) # 이전 url 추가
 
+# class AnchorClick(Base):
+#     __tablename__ = "anchor_clicks"
+#     id = Column(Integer, primary_key=True, index=True)
+#     timestamp = Column(DateTime, default=lambda: datetime.now(KST))
+#     source_url = Column(String)  # 사용자가 클릭한 링크의 출발 URL
+#     target_url = Column(String)  # 사용자가 클릭한 링크의 도착 URL
+#     ip_address = Column(String) # 사용자 IP
+#     session_id = Column(String) # 사용자 session ID
+#     user_agent = Column(String)  # 사용자의 User-Agent 정보
+#     is_mobile = Column(Integer)  # 모바일 기기 여부
+#     is_pc = Column(Integer)  # PC 기기 여부
+#     type = Column(String)
 
-class AnchorClick(Base):
-    __tablename__ = "anchor_clicks"
-    id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(DateTime, default=lambda: datetime.now(KST))
-    source_url = Column(String)  # 사용자가 클릭한 링크의 출발 URL
-    target_url = Column(String)  # 사용자가 클릭한 링크의 도착 URL
-    ip_address = Column(String) # 사용자 IP
-    session_id = Column(String) # 사용자 session ID
-    user_agent = Column(String)  # 사용자의 User-Agent 정보
-    is_mobile = Column(Integer)  # 모바일 기기 여부
-    is_pc = Column(Integer)  # PC 기기 여부
-    type = Column(String)
-
-class WenivSql(Base):
-    __tablename__ = "wenivsql_data"
-    id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(DateTime, default=lambda: datetime.now(KST))
-    contents = Column(String)  # run sql 한 내용
-    ip_address = Column(String) # 사용자 IP
-    session_id = Column(String) # 사용자 session ID
-    user_agent = Column(String)  # 사용자의 User-Agent 정보
-    is_mobile = Column(Integer)  # 모바일 기기 여부
-    is_pc = Column(Integer)  # PC 기기 여부
+# class WenivSql(Base):
+    # __tablename__ = "wenivsql_data"
+    # id = Column(Integer, primary_key=True, index=True)
+    # timestamp = Column(DateTime, default=lambda: datetime.now(KST))
+    # contents = Column(String)  # run sql 한 내용
+    # ip_address = Column(String) # 사용자 IP
+    # session_id = Column(String) # 사용자 session ID
+    # user_agent = Column(String)  # 사용자의 User-Agent 정보
+    # is_mobile = Column(Integer)  # 모바일 기기 여부
+    # is_pc = Column(Integer)  # PC 기기 여부
 
 # 데이터베이스 테이블 생성
 Base.metadata.create_all(bind=engine)
@@ -187,7 +187,7 @@ async def collect_anchor_click(
         type = data.type
     )
 
-    if '127.0.0.1' not in data.url and 'localhost' not in data.url:
+    if '127.0.0.1' not in data.source_url and 'localhost' not in data.source_url:
         db.add(anchor_click)
         db.commit()
 
@@ -371,7 +371,7 @@ async def get_anchor_clicks(
     if date_start and date_end:
         start_date, end_date = get_date_range(date_start, date_end, interval)
         query = query.filter(
-            AnchorClick.timestamp >= start_date, AnchorClick.timestamp <= end_date
+            AnchorClick.timestamp >= start_date, AnchorClick.timestamp <= end_date.replace(hour=23, minute=59, second=59),
         )
 
     anchor_clicks = query.all()
@@ -456,6 +456,78 @@ async def get_anchor_clicks(
 
     return processed_data
 
+@app.get("/analytics/user_location")
+async def get_anchor_clicks(
+        user_location: str,
+        date_start: str = "",
+        date_end: str = "",
+        interval: str = "daily",
+        db: SessionLocal = Depends(get_db),
+):
+    start_date, end_date = get_date_range(date_start, date_end, interval)
+
+    pageviews = (
+        db.query(Pageview)
+        .filter(
+            Pageview.user_location.like(f"%{user_location}%"),
+            Pageview.timestamp >= start_date,
+            Pageview.timestamp <= end_date.replace(hour=23, minute=59, second=59),
+        )
+        .all()
+    )
+
+    # 데이터 가공
+    processed_data = {
+        "total_pageviews": len(pageviews),
+        "data": {},
+    }
+
+    # 일일, 주간, 월간별 데이터 계산
+    current_date = start_date
+    while current_date <= end_date:
+        if interval == "daily":
+            next_date = current_date + timedelta(days=1)
+        elif interval == "weekly":
+            next_date = current_date + timedelta(days=7)
+        elif interval == "monthly":
+            next_date = current_date.replace(day=28) + timedelta(days=4)
+            next_date = next_date.replace(day=1)
+
+        filtered_pageviews = [
+            p for p in pageviews if current_date <= p.timestamp < next_date
+        ]
+
+        # 데이터가 있는 경우에만 처리
+        if filtered_pageviews:
+            if interval == "daily":
+                date_key = current_date.strftime("%Y%m%d")
+            elif interval == "weekly":
+                date_key = f"{current_date.strftime('%Y%m%d')}-{(next_date - timedelta(days=1)).strftime('%Y%m%d')}"
+            elif interval == "monthly":
+                date_key = current_date.strftime("%Y%m")
+
+            processed_data["data"][date_key] = {
+                "num": len(filtered_pageviews),
+                "pageviews_by_location": {}
+            }
+
+            # 지역별 페이지뷰 수 계산
+            for pageview in filtered_pageviews:
+                if (
+                        pageview.user_location
+                        not in processed_data["data"][date_key]["pageviews_by_location"]
+                ):
+                    processed_data["data"][date_key]["pageviews_by_location"][
+                        pageview.user_location
+                    ] = 0
+                processed_data["data"][date_key]["pageviews_by_location"][
+                    pageview.user_location
+                ] += 1
+
+        current_date = next_date
+
+    return processed_data
+        
 # health check
 @app.get("/health")
 def health_check():
