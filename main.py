@@ -2,16 +2,12 @@ from fastapi import FastAPI, Request, Depends, Header # , Cookie, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from models import Pageview, AnchorClick, WenivSql, Base
-from sqlalchemy import create_engine # , Column, Integer, String, DateTime
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-# from sqlalchemy.ext.declarative import declarative_base
 from user_agents import parse
-from geoip2.database import Reader
 from datetime import datetime, timedelta
-import pytz
 from typing import Optional
-import secrets
-import logging
+from utils import generate_session_id, get_date_range, KST, reader, logger
 
 app = FastAPI()
 
@@ -29,15 +25,6 @@ engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-# Base = declarative_base()
-
-logger = logging.getLogger(__name__)
-
-# GeoIP 데이터베이스 로드
-reader = Reader("GeoLite2-City.mmdb")
-
-# 한국 시간대 설정
-KST = pytz.timezone("Asia/Seoul")
 
 # 데이터베이스 종속성
 def get_db():
@@ -46,48 +33,6 @@ def get_db():
         yield db
     finally:
         db.close()
-
-# 세션 ID 생성 함수
-def generate_session_id():
-    return secrets.token_urlsafe(16)  # 16바이트 길이의 무작위 문자열 생성
-
-# # 모델 정의
-# class Pageview(Base):
-#     __tablename__ = "pageviews"
-#     id = Column(Integer, primary_key=True, index=True)
-#     timestamp = Column(DateTime, default=lambda: datetime.now(KST))
-#     url = Column(String)  # 사용자가 접속한 URL
-#     ip_address = Column(String) # 사용자 IP
-#     session_id = Column(String) # 사용자 session ID
-#     user_location = Column(String)  # 사용자의 지역 정보
-#     user_agent = Column(String)  # 사용자의 User-Agent 정보
-#     is_mobile = Column(Integer)  # 모바일 기기 여부
-#     is_pc = Column(Integer)  # PC 기기 여부
-#     referer_url = Column(String) # 이전 url 추가
-
-# class AnchorClick(Base):
-#     __tablename__ = "anchor_clicks"
-#     id = Column(Integer, primary_key=True, index=True)
-#     timestamp = Column(DateTime, default=lambda: datetime.now(KST))
-#     source_url = Column(String)  # 사용자가 클릭한 링크의 출발 URL
-#     target_url = Column(String)  # 사용자가 클릭한 링크의 도착 URL
-#     ip_address = Column(String) # 사용자 IP
-#     session_id = Column(String) # 사용자 session ID
-#     user_agent = Column(String)  # 사용자의 User-Agent 정보
-#     is_mobile = Column(Integer)  # 모바일 기기 여부
-#     is_pc = Column(Integer)  # PC 기기 여부
-#     type = Column(String)
-
-# class WenivSql(Base):
-    # __tablename__ = "wenivsql_data"
-    # id = Column(Integer, primary_key=True, index=True)
-    # timestamp = Column(DateTime, default=lambda: datetime.now(KST))
-    # contents = Column(String)  # run sql 한 내용
-    # ip_address = Column(String) # 사용자 IP
-    # session_id = Column(String) # 사용자 session ID
-    # user_agent = Column(String)  # 사용자의 User-Agent 정보
-    # is_mobile = Column(Integer)  # 모바일 기기 여부
-    # is_pc = Column(Integer)  # PC 기기 여부
 
 # 데이터베이스 테이블 생성
 Base.metadata.create_all(bind=engine)
@@ -236,22 +181,6 @@ async def collect_sql(
         logger.log(logging.DEBUG, f"Error: {e}")
 
     return {"status": "success", "message": "sql data collected successfully"}
-
-def get_date_range(date_start: str, date_end: str, interval: str):
-    start_date = datetime.strptime(date_start, "%Y%m%d")
-    end_date = datetime.strptime(date_end, "%Y%m%d")
-
-    if interval == "daily":
-        return start_date, end_date
-    elif interval == "weekly":
-        start_date = start_date - timedelta(days=start_date.weekday())
-        end_date = end_date - timedelta(days=end_date.weekday()) + timedelta(days=6)
-    elif interval == "monthly":
-        start_date = start_date.replace(day=1)
-        end_date = end_date.replace(day=1) + timedelta(days=32)
-        end_date = end_date.replace(day=1) - timedelta(days=1)
-
-    return start_date, end_date
 
 @app.get("/analytics/pageviews")
 async def get_pageviews(
