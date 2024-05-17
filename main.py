@@ -123,15 +123,27 @@ async def get_pageviews(
             p for p in pageviews if current_date <= p.timestamp < next_date
         ]
 
+        if interval == "daily":
+            date_key = current_date.strftime("%Y%m%d")
+        elif interval == "weekly":
+            date_key = f"{current_date.strftime('%Y%m%d')}-{(next_date - timedelta(days=1)).strftime('%Y%m%d')}"
+        elif interval == "monthly":
+            date_key = current_date.strftime("%Y%m")
+
+        # 기본 구조 생성
+        processed_data["data"][date_key] = {
+            "num": 0,
+            "pageviews_by_location": {},
+            "pageviews_by_device": {
+                "mobile": 0,
+                "pc": 0,
+            },
+            "pageviews_by_os": {},
+            "pageviews_by_browser": {},
+        }
+
         # 데이터가 있는 경우에만 처리
         if filtered_pageviews:
-            if interval == "daily":
-                date_key = current_date.strftime("%Y%m%d")
-            elif interval == "weekly":
-                date_key = f"{current_date.strftime('%Y%m%d')}-{(next_date - timedelta(days=1)).strftime('%Y%m%d')}"
-            elif interval == "monthly":
-                date_key = current_date.strftime("%Y%m")
-
             processed_data["data"][date_key] = {
                 "num": len(filtered_pageviews),
                 "pageviews_by_location": {},
@@ -269,15 +281,26 @@ async def get_anchor_clicks(
             c for c in anchor_clicks if current_date <= c.timestamp < next_date
         ]
 
+        if interval == "daily":
+            date_key = current_date.strftime("%Y%m%d")
+        elif interval == "weekly":
+            date_key = f"{current_date.strftime('%Y%m%d')}-{(next_date - timedelta(days=1)).strftime('%Y%m%d')}"
+        elif interval == "monthly":
+            date_key = current_date.strftime("%Y%m")
+
+        # 기본 구조 생성
+        processed_data["data"][date_key] = {
+            "clicks_by_target_url": {},
+            "clicks_by_device": {
+                "mobile": 0,
+                "pc": 0,
+            },
+            "clicks_by_os": {},
+            "clicks_by_browser": {},
+        }
+
         # 데이터가 있는 경우에만 처리
         if filtered_clicks:
-            if interval == "daily":
-                date_key = current_date.strftime("%Y%m%d")
-            elif interval == "weekly":
-                date_key = f"{current_date.strftime('%Y%m%d')}-{(next_date - timedelta(days=1)).strftime('%Y%m%d')}"
-            elif interval == "monthly":
-                date_key = current_date.strftime("%Y%m")
-
             processed_data["data"][date_key] = {
                 "clicks_by_target_url": {},
                 "clicks_by_device": {
