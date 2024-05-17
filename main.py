@@ -1,7 +1,6 @@
 from fastapi import FastAPI, Request, Depends, Header # , Cookie, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from models import Pageview, AnchorClick, WenivSql, Base
+from models import Pageview, AnchorClick, WenivSql, PageviewData, AnchorClickData, WenivSqlData, Base
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from user_agents import parse
@@ -36,18 +35,6 @@ def get_db():
 
 # 데이터베이스 테이블 생성
 Base.metadata.create_all(bind=engine)
-
-# 수집할 데이터의 모델 정의
-class PageviewData(BaseModel):
-    url: str
-
-class AnchorClickData(BaseModel):
-    source_url: str
-    target_url: str
-    type:str
-
-class WenivSqlData(BaseModel):
-    contents:str
 
 @app.post("/collect/pageview")
 async def collect_pageview(
@@ -94,93 +81,6 @@ async def collect_pageview(
         logger.log(logging.DEBUG, f"Error: {e}")
 
     return {"status": "success", "message": "Pageview data collected successfully", "session_id":session_id, "referer_url":referer}
-
-@app.post("/collect/anchor-click")
-async def collect_anchor_click(
-        request: Request, data: AnchorClickData, db: SessionLocal = Depends(get_db)
-        ,user_agent: str = Header(None),session_id: str = Header(None,alias="Session-Id")
-):
-    user_agent_string = request.headers.get("User-Agent")
-    user_agent = parse(user_agent_string)
-
-    # IP 주소로 지역 정보 파싱
-    client_ip = request.headers.get("X-Forwarded-For")
-    if client_ip:
-        client_ip = client_ip.split(",")[0].strip()
-    else:
-        client_ip = request.client.host if request.client else None
-    try:
-        response = reader.city(client_ip)
-        user_location = f"{response.city.name}, {response.country.name}"
-    except:
-        user_location = "Unknown"
-
-    session_id = request.headers.get('Session-Id')
-    
-    # 세션 ID가 없는 경우 새로 생성
-    if session_id is None:
-        session_id = generate_session_id()  
-
-    anchor_click = AnchorClick(
-        source_url=data.source_url,
-        target_url=data.target_url,
-        ip_address = client_ip,
-        session_id = session_id,
-        user_agent=user_agent_string,
-        is_mobile=int(user_agent.is_mobile),
-        is_pc=int(user_agent.is_pc),
-        type = data.type
-    )
-
-    if '127.0.0.1' not in data.source_url and 'localhost' not in data.source_url:
-        db.add(anchor_click)
-        db.commit()
-
-    return {"status": "success", "message": "Anchor click data collected successfully"}
-
-@app.post("/collect/sql")
-async def collect_sql(
-        request: Request, data: WenivSqlData, db: SessionLocal = Depends(get_db)
-        ,user_agent: str = Header(None),session_id: str = Header(None,alias="Session-Id")
-):
-    try:
-        user_agent_string = request.headers.get("User-Agent")
-        user_agent = parse(user_agent_string)
-
-        # IP 주소로 지역 정보 파싱
-        client_ip = request.headers.get("X-Forwarded-For")
-        if client_ip:
-            client_ip = client_ip.split(",")[0].strip()
-        else:
-            client_ip = request.client.host if request.client else None
-        try:
-            response = reader.city(client_ip)
-            user_location = f"{response.city.name}, {response.country.name}"
-        except:
-            user_location = "Unknown"
-
-        session_id = request.headers.get('Session-Id')
-        
-        # 세션 ID가 없는 경우 새로 생성
-        if session_id is None:
-            session_id = generate_session_id()  
-
-        sql_data = WenivSql(
-            contents=data.contents,
-            ip_address = client_ip,
-            session_id = session_id,
-            user_agent=user_agent_string,
-            is_mobile=int(user_agent.is_mobile),
-            is_pc=int(user_agent.is_pc),
-        )
-
-        db.add(sql_data)
-        db.commit()
-        
-    except Exception as e:
-        logger.log(logging.DEBUG, f"Error: {e}")
-
-    return {"status": "success", "message": "sql data collected successfully"}
 
 @app.get("/analytics/pageviews")
 async def get_pageviews(
@@ -282,6 +182,49 @@ async def get_pageviews(
         current_date = next_date
 
     return processed_data
+
+@app.post("/collect/anchor-click")
+async def collect_anchor_click(
+        request: Request, data: AnchorClickData, db: SessionLocal = Depends(get_db)
+        ,user_agent: str = Header(None),session_id: str = Header(None,alias="Session-Id")
+):
+    user_agent_string = request.headers.get("User-Agent")
+    user_agent = parse(user_agent_string)
+
+    # IP 주소로 지역 정보 파싱
+    client_ip = request.headers.get("X-Forwarded-For")
+    if client_ip:
+        client_ip = client_ip.split(",")[0].strip()
+    else:
+        client_ip = request.client.host if request.client else None
+    try:
+        response = reader.city(client_ip)
+        user_location = f"{response.city.name}, {response.country.name}"
+    except:
+        user_location = "Unknown"
+
+    session_id = request.headers.get('Session-Id')
+    
+    # 세션 ID가 없는 경우 새로 생성
+    if session_id is None:
+        session_id = generate_session_id()  
+
+    anchor_click = AnchorClick(
+        source_url=data.source_url,
+        target_url=data.target_url,
+        ip_address = client_ip,
+        session_id = session_id,
+        user_agent=user_agent_string,
+        is_mobile=int(user_agent.is_mobile),
+        is_pc=int(user_agent.is_pc),
+        type = data.type
+    )
+
+    if '127.0.0.1' not in data.source_url and 'localhost' not in data.source_url:
+        db.add(anchor_click)
+        db.commit()
+
+    return {"status": "success", "message": "Anchor click data collected successfully"}
 
 @app.get("/analytics/anchor-clicks")
 async def get_anchor_clicks(
@@ -385,78 +328,50 @@ async def get_anchor_clicks(
 
     return processed_data
 
-@app.get("/analytics/user_location")
-async def get_anchor_clicks(
-        user_location: str,
-        date_start: str = "",
-        date_end: str = "",
-        interval: str = "daily",
-        db: SessionLocal = Depends(get_db),
+@app.post("/collect/sql")
+async def collect_sql(
+        request: Request, data: WenivSqlData, db: SessionLocal = Depends(get_db)
+        ,user_agent: str = Header(None),session_id: str = Header(None,alias="Session-Id")
 ):
-    start_date, end_date = get_date_range(date_start, date_end, interval)
+    try:
+        user_agent_string = request.headers.get("User-Agent")
+        user_agent = parse(user_agent_string)
 
-    pageviews = (
-        db.query(Pageview)
-        .filter(
-            Pageview.user_location.like(f"%{user_location}%"),
-            Pageview.timestamp >= start_date,
-            Pageview.timestamp <= end_date.replace(hour=23, minute=59, second=59),
-        )
-        .all()
-    )
+        # IP 주소로 지역 정보 파싱
+        client_ip = request.headers.get("X-Forwarded-For")
+        if client_ip:
+            client_ip = client_ip.split(",")[0].strip()
+        else:
+            client_ip = request.client.host if request.client else None
+        try:
+            response = reader.city(client_ip)
+            user_location = f"{response.city.name}, {response.country.name}"
+        except:
+            user_location = "Unknown"
 
-    # 데이터 가공
-    processed_data = {
-        "total_pageviews": len(pageviews),
-        "data": {},
-    }
-
-    # 일일, 주간, 월간별 데이터 계산
-    current_date = start_date
-    while current_date <= end_date:
-        if interval == "daily":
-            next_date = current_date + timedelta(days=1)
-        elif interval == "weekly":
-            next_date = current_date + timedelta(days=7)
-        elif interval == "monthly":
-            next_date = current_date.replace(day=28) + timedelta(days=4)
-            next_date = next_date.replace(day=1)
-
-        filtered_pageviews = [
-            p for p in pageviews if current_date <= p.timestamp < next_date
-        ]
-
-        # 데이터가 있는 경우에만 처리
-        if filtered_pageviews:
-            if interval == "daily":
-                date_key = current_date.strftime("%Y%m%d")
-            elif interval == "weekly":
-                date_key = f"{current_date.strftime('%Y%m%d')}-{(next_date - timedelta(days=1)).strftime('%Y%m%d')}"
-            elif interval == "monthly":
-                date_key = current_date.strftime("%Y%m")
-
-            processed_data["data"][date_key] = {
-                "num": len(filtered_pageviews),
-                "pageviews_by_location": {}
-            }
-
-            # 지역별 페이지뷰 수 계산
-            for pageview in filtered_pageviews:
-                if (
-                        pageview.user_location
-                        not in processed_data["data"][date_key]["pageviews_by_location"]
-                ):
-                    processed_data["data"][date_key]["pageviews_by_location"][
-                        pageview.user_location
-                    ] = 0
-                processed_data["data"][date_key]["pageviews_by_location"][
-                    pageview.user_location
-                ] += 1
-
-        current_date = next_date
-
-    return processed_data
+        session_id = request.headers.get('Session-Id')
         
+        # 세션 ID가 없는 경우 새로 생성
+        if session_id is None:
+            session_id = generate_session_id()  
+
+        sql_data = WenivSql(
+            contents=data.contents,
+            ip_address = client_ip,
+            session_id = session_id,
+            user_agent=user_agent_string,
+            is_mobile=int(user_agent.is_mobile),
+            is_pc=int(user_agent.is_pc),
+        )
+
+        db.add(sql_data)
+        db.commit()
+        
+    except Exception as e:
+        logger.log(logging.DEBUG, f"Error: {e}")
+
+    return {"status": "success", "message": "sql data collected successfully"}
+
 # health check
 @app.get("/health")
 def health_check():

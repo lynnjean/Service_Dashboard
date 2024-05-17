@@ -1,12 +1,10 @@
 from sqlalchemy import Column, Integer, String, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
-import pytz
+from utils import KST
+from pydantic import BaseModel
 
 Base = declarative_base()
-
-# 한국 시간대 설정
-KST = pytz.timezone("Asia/Seoul")
 
 # 모델 정의
 class Pageview(Base):
@@ -46,3 +44,16 @@ class WenivSql(Base):
     user_agent = Column(String)  # 사용자의 User-Agent 정보
     is_mobile = Column(Integer)  # 모바일 기기 여부
     is_pc = Column(Integer)  # PC 기기 여부
+
+# 수집할 데이터의 모델 정의
+class PageviewData(BaseModel):
+    url: str
+    # reload: int
+
+class AnchorClickData(BaseModel):
+    source_url: str
+    target_url: str
+    type:str
+
+class WenivSqlData(BaseModel):
+    contents:str
