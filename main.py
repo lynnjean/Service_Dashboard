@@ -195,6 +195,59 @@ async def get_pageviews(
 
     return processed_data
 
+@app.get('/analytics/pageviews/active_users')
+async def active_users(
+        url: str,
+        db: SessionLocal = Depends(get_db),
+):
+    # 오늘 날짜 구하기
+    today = datetime.today().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    daily_pageviews = [p for p in (
+        db.query(Pageview)
+        .filter(
+            Pageview.url.like(f"%{url}%"),
+            Pageview.timestamp >= today,
+            Pageview.timestamp < today + timedelta(days=1),
+        )
+        .all()
+    )]
+
+    weekly_pageviews = [p for p in (
+        db.query(Pageview)
+        .filter(
+            Pageview.url.like(f"%{url}%"),
+            Pageview.timestamp >= today - timedelta(days=7),
+            Pageview.timestamp < today + timedelta(days=1),
+        )
+        .all()
+    )]
+
+    monthly_pageviews = [p for p in (
+        db.query(Pageview)
+        .filter(
+            Pageview.url.like(f"%{url}%"),
+            Pageview.timestamp >= today - timedelta(days=30),
+            Pageview.timestamp < today + timedelta(days=1),
+        )
+        .all()
+    )]
+
+    # 데이터 가공
+    processed_data = {
+        "dau": {},
+        "wau": {},
+        "mau": {},
+    }
+
+    if monthly_pageviews:
+        today_str = today.strftime("%Y%m%d")
+        processed_data["dau"][today_str] = len(daily_pageviews)
+        processed_data["wau"][f'{(today - timedelta(days=7)).strftime("%Y%m%d")} ~ {today_str}'] = len(weekly_pageviews)
+        processed_data["mau"][f'{(today - timedelta(days=30)).strftime("%Y%m%d")} ~ {today_str}'] = len(monthly_pageviews)
+
+    return processed_data
+
 @app.post("/collect/anchor-click")
 async def collect_anchor_click(
         request: Request, data: AnchorClickData, db: SessionLocal = Depends(get_db)
