@@ -195,6 +195,127 @@ async def get_pageviews(
 
     return processed_data
 
+@app.get("/analytics/pageviews/usercount")
+async def get_pageviews_usercount(
+        url: str,
+        date_start: str,
+        date_end: str,
+        interval: str = "daily",
+        db: SessionLocal = Depends(get_db),
+):
+    start_date, end_date = get_date_range(date_start, date_end, interval)
+
+    pageviews = (
+        db.query(Pageview)
+        .filter(
+            Pageview.url.like(f"%{url}%"),
+            Pageview.timestamp >= start_date,
+            Pageview.timestamp <= end_date.replace(hour=23, minute=59, second=59),
+        )
+        .all()
+    )
+
+    # 데이터 가공
+    processed_data = {
+        "total_pageviews": len(pageviews),
+        "data": {},
+    }
+
+    # 일일, 주간, 월간별 데이터 계산
+    current_date = start_date
+    while current_date <= end_date:
+        if interval == "daily":
+            next_date = current_date + timedelta(days=1)
+        elif interval == "weekly":
+            next_date = current_date + timedelta(days=7)
+        elif interval == "monthly":
+            next_date = current_date.replace(day=28) + timedelta(days=4)
+            next_date = next_date.replace(day=1)
+
+        filtered_pageviews = [
+            p for p in pageviews if current_date <= p.timestamp < next_date
+        ]
+
+        # session_id 중복 제거
+        unique_session_pageviews = []
+        seen_sessions = set()
+        for p in filtered_pageviews:
+            if p.session_id not in seen_sessions:
+                unique_session_pageviews.append(p)
+                seen_sessions.add(p.session_id)
+
+        if interval == "daily":
+            date_key = current_date.strftime("%Y%m%d")
+        elif interval == "weekly":
+            date_key = f"{current_date.strftime('%Y%m%d')}-{(next_date - timedelta(days=1)).strftime('%Y%m%d')}"
+        elif interval == "monthly":
+            date_key = current_date.strftime("%Y%m")
+
+        # 기본 구조 생성
+        processed_data["data"][date_key] = {
+            "num": 0,
+            "pageviews_by_location": {},
+            "pageviews_by_device": {
+                "mobile": 0,
+                "pc": 0,
+            },
+            "pageviews_by_os": {},
+            "pageviews_by_browser": {},
+        }
+
+        # 데이터가 있는 경우에만 처리
+        if unique_session_pageviews:
+            processed_data["data"][date_key] = {
+                "num": len(unique_session_pageviews),
+                "pageviews_by_location": {},
+                "pageviews_by_device": {
+                    "mobile": sum(p.is_mobile for p in unique_session_pageviews),
+                    "pc": sum(p.is_pc for p in unique_session_pageviews),
+                },
+                "pageviews_by_os": {},
+                "pageviews_by_browser": {},
+            }
+
+            # 지역별 페이지뷰 수 계산
+            for pageview in unique_session_pageviews:
+                if (
+                        pageview.user_location
+                        not in processed_data["data"][date_key]["pageviews_by_location"]
+                ):
+                    processed_data["data"][date_key]["pageviews_by_location"][
+                        pageview.user_location
+                    ] = 0
+                processed_data["data"][date_key]["pageviews_by_location"][
+                    pageview.user_location
+                ] += 1
+
+            # OS별 페이지뷰 수 계산
+            for pageview in unique_session_pageviews:
+                user_agent = parse(pageview.user_agent)
+                os_family = user_agent.os.family
+                if os_family not in processed_data["data"][date_key]["pageviews_by_os"]:
+                    processed_data["data"][date_key]["pageviews_by_os"][os_family] = 0
+                processed_data["data"][date_key]["pageviews_by_os"][os_family] += 1
+
+            # 브라우저별 페이지뷰 수 계산
+            for pageview in unique_session_pageviews:
+                user_agent = parse(pageview.user_agent)
+                browser_family = user_agent.browser.family
+                if (
+                        browser_family
+                        not in processed_data["data"][date_key]["pageviews_by_browser"]
+                ):
+                    processed_data["data"][date_key]["pageviews_by_browser"][
+                        browser_family
+                    ] = 0
+                processed_data["data"][date_key]["pageviews_by_browser"][
+                    browser_family
+                ] += 1
+
+        current_date = next_date
+
+    return processed_data
+
 @app.get('/analytics/pageviews/active_users')
 async def active_users(
         url: str,
