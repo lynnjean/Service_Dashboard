@@ -370,7 +370,7 @@ async def active_users(
     return processed_data
 
 @app.get('/analytics/pageviews/top5') # mau 기준 서비스 top5
-def active_users():
+def pageview_top5():
     service_list = [
         'books.weniv',
         'weniv.link',
