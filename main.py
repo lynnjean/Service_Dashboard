@@ -82,7 +82,7 @@ async def collect_pageview(
 
     return {"status": "success", "message": "Pageview data collected successfully", "session_id":session_id, "referer_url":referer}
 
-@app.get("/analytics/pageviews")
+@app.get("/analytics/pageviews") # 접속횟수
 async def get_pageviews(
         url: str,
         date_start: str,
@@ -195,7 +195,7 @@ async def get_pageviews(
 
     return processed_data
 
-@app.get("/analytics/pageviews/usercount")
+@app.get("/analytics/pageviews/usercount") # 접속자수
 async def get_pageviews_usercount(
         url: str,
         date_start: str,
@@ -316,7 +316,7 @@ async def get_pageviews_usercount(
 
     return processed_data
 
-@app.get('/analytics/pageviews/active_users')
+@app.get('/analytics/pageviews/active_users') # 활성화 유저 수(dau, wau, mau)
 async def active_users(
         url: str,
         db: SessionLocal = Depends(get_db),
@@ -366,6 +366,39 @@ async def active_users(
         processed_data["mau"][f'{(today - timedelta(days=30)).strftime("%Y%m%d")} ~ {today_str}'] = monthly_pageviews
 
     return processed_data
+
+@app.get('/analytics/pageviews/top5') # mau 기준 서비스 top5
+def active_users():
+    service_list = [
+        'books.weniv',
+        'weniv.link',
+        'world.weniv',
+        'sql.weniv',
+        'notebook.weniv'
+    ]
+
+    service_mau = {}
+    for name in service_list:
+        response = requests.get(f'https://analytics.weniv.co.kr/analytics/pageviews/active_users?url={name}')
+
+        if response.status_code == 200:
+            # JSON 응답 데이터 파싱
+            data = response.json()
+            if 'mau' in data and data['mau']:
+                service_mau[name]=next(iter(data['mau'].values()))
+
+    # 값 기준으로 정렬
+    service_sort = sorted(service_mau.items(), key=lambda x: x[1], reverse=True)
+
+    # 상위 5개 항목 추출
+    top5 = service_sort[:5]
+
+    top5_list={}
+
+    for service, mau in top5:
+        top5_list[service]=mau
+
+    return top5_list
 
 @app.post("/collect/anchor-click")
 async def collect_anchor_click(
