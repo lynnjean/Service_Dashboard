@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request, Depends, Header # , Cookie, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from models import Pageview, AnchorClick, WenivSql, PageviewData, AnchorClickData, WenivSqlData, Base
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
 from user_agents import parse
 from datetime import datetime, timedelta
@@ -203,35 +203,33 @@ async def active_users(
     # 오늘 날짜 구하기
     today = datetime.today().replace(hour=0, minute=0, second=0, microsecond=0)
 
-    daily_pageviews = [p for p in (
-        db.query(Pageview)
+    daily_pageviews = (
+        db.query(func.count(Pageview.session_id.distinct()))
         .filter(
             Pageview.url.like(f"%{url}%"),
             Pageview.timestamp >= today,
             Pageview.timestamp < today + timedelta(days=1),
         )
-        .all()
-    )]
-
-    weekly_pageviews = [p for p in (
-        db.query(Pageview)
+        .scalar()
+    )
+    weekly_pageviews = (
+        db.query(func.count(Pageview.session_id.distinct()))
         .filter(
             Pageview.url.like(f"%{url}%"),
             Pageview.timestamp >= today - timedelta(days=7),
             Pageview.timestamp < today + timedelta(days=1),
         )
-        .all()
-    )]
-
-    monthly_pageviews = [p for p in (
-        db.query(Pageview)
+        .scalar()
+    )
+    monthly_pageviews = (
+        db.query(func.count(Pageview.session_id.distinct()))
         .filter(
             Pageview.url.like(f"%{url}%"),
             Pageview.timestamp >= today - timedelta(days=30),
             Pageview.timestamp < today + timedelta(days=1),
         )
-        .all()
-    )]
+        .scalar()
+    )
 
     # 데이터 가공
     processed_data = {
@@ -242,9 +240,9 @@ async def active_users(
 
     if monthly_pageviews:
         today_str = today.strftime("%Y%m%d")
-        processed_data["dau"][today_str] = len(daily_pageviews)
-        processed_data["wau"][f'{(today - timedelta(days=7)).strftime("%Y%m%d")} ~ {today_str}'] = len(weekly_pageviews)
-        processed_data["mau"][f'{(today - timedelta(days=30)).strftime("%Y%m%d")} ~ {today_str}'] = len(monthly_pageviews)
+        processed_data["dau"][today_str] = daily_pageviews
+        processed_data["wau"][f'{(today - timedelta(days=7)).strftime("%Y%m%d")} ~ {today_str}'] = weekly_pageviews
+        processed_data["mau"][f'{(today - timedelta(days=30)).strftime("%Y%m%d")} ~ {today_str}'] = monthly_pageviews
 
     return processed_data
 
