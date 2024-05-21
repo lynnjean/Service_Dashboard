@@ -215,9 +215,19 @@ async def get_pageviews_usercount(
         .all()
     )
 
+    session_pageviews = (
+        db.query(Pageview.session_id.distinct())
+        .filter(
+            Pageview.url.like(f"%{url}%"),
+            Pageview.timestamp >= start_date,
+            Pageview.timestamp <= end_date.replace(hour=23, minute=59, second=59),
+        )
+        .all()
+    )
+
     # 데이터 가공
     processed_data = {
-        "total_pageviews": len(pageviews),
+        "total_pageviews": len(session_pageviews),
         "data": {},
     }
 
