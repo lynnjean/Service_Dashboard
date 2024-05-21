@@ -73,7 +73,7 @@ async def collect_pageview(
             is_mobile=int(user_agent.is_mobile),
             is_pc=int(user_agent.is_pc),
         )
-        
+
         if ('127.0.0.1' not in data.url) and ('localhost' not in data.url) and ('webpagetest' not in user_agent.browser[0]) and ('bot' not in user_agent_string.lower()) and ('yeti' not in user_agent_string.lower()) and ('headlesschrome' not in user_agent_string.lower()):
             db.add(pageview)
             db.commit()
@@ -348,7 +348,7 @@ async def active_users(
         db.query(func.count(Pageview.session_id.distinct()))
         .filter(
             Pageview.url.like(f"%{url}%"),
-            Pageview.timestamp >= today - timedelta(days=7),
+            Pageview.timestamp >= today - timedelta(days=6),
             Pageview.timestamp < today + timedelta(days=1),
         )
         .scalar()
@@ -357,7 +357,7 @@ async def active_users(
         db.query(func.count(Pageview.session_id.distinct()))
         .filter(
             Pageview.url.like(f"%{url}%"),
-            Pageview.timestamp >= today - timedelta(days=30),
+            Pageview.timestamp >= today - timedelta(days=29),
             Pageview.timestamp < today + timedelta(days=1),
         )
         .scalar()
@@ -375,8 +375,8 @@ async def active_users(
         processed_data["dau"][today_str] = daily_pageviews
         processed_data["dau"]['일주일평균(일)'] = weekly_pageviews/7
         processed_data["dau"]['월평균(일)'] = monthly_pageviews/30
-        processed_data["wau"][f'{(today - timedelta(days=7)).strftime("%Y%m%d")} ~ {today_str}'] = weekly_pageviews
-        processed_data["mau"][f'{(today - timedelta(days=30)).strftime("%Y%m%d")} ~ {today_str}'] = monthly_pageviews
+        processed_data["wau"][f'{(today - timedelta(days=6)).strftime("%Y%m%d")} ~ {today_str}'] = weekly_pageviews
+        processed_data["mau"][f'{(today - timedelta(days=29)).strftime("%Y%m%d")} ~ {today_str}'] = monthly_pageviews
 
     return processed_data
 
