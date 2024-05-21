@@ -73,7 +73,8 @@ async def collect_pageview(
             is_mobile=int(user_agent.is_mobile),
             is_pc=int(user_agent.is_pc),
         )
-        if '127.0.0.1' not in data.url and 'localhost' not in data.url:
+        
+        if ('127.0.0.1' not in data.url) and ('localhost' not in data.url) and ('webpagetest' not in user_agent.browser[0]) and ('bot' not in user_agent_string.lower()) and ('yeti' not in user_agent_string.lower()) and ('headlesschrome' not in user_agent_string.lower()):
             db.add(pageview)
             db.commit()
 
@@ -82,7 +83,7 @@ async def collect_pageview(
 
     return {"status": "success", "message": "Pageview data collected successfully", "session_id":session_id, "referer_url":referer}
 
-@app.get("/analytics/pageviews") # 접속횟수
+@app.get("/analytics/pageviews") # 접속횟수, 날짜 필터링
 async def get_pageviews(
         url: str,
         date_start: str,
@@ -195,7 +196,7 @@ async def get_pageviews(
 
     return processed_data
 
-@app.get("/analytics/pageviews/usercount") # 접속자수
+@app.get("/analytics/pageviews/usercount") # 접속자수, 날짜 필터링
 async def get_pageviews_usercount(
         url: str,
         date_start: str,
@@ -449,7 +450,11 @@ async def collect_anchor_click(
         type = data.type
     )
 
-    if '127.0.0.1' not in data.source_url and 'localhost' not in data.source_url:
+    excluded_sources = ['127.0.0.1', 'localhost']
+    excluded_agents = ['bot', 'yeti','headlesschrome']
+
+    if all(source not in data.source_url for source in excluded_sources) and \
+    all(agent not in user_agent_string.lower() for agent in excluded_agents) and ('webpagetest' not in user_agent.browser[0]):
         db.add(anchor_click)
         db.commit()
 
