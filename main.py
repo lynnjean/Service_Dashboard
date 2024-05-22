@@ -7,6 +7,7 @@ from user_agents import parse
 from datetime import datetime, timedelta
 from typing import Optional
 from utils import generate_session_id, get_date_range, KST, reader, logger
+import requests
 
 app = FastAPI()
 
@@ -381,7 +382,9 @@ async def active_users(
     return processed_data
 
 @app.get('/analytics/pageviews/top5') # mau 기준 서비스 top5
-def pageview_top5():
+def pageview_top5(        
+    interval: str = "daily",
+):
     service_list = [
         'books.weniv',
         'weniv.link',
@@ -390,26 +393,30 @@ def pageview_top5():
         'notebook.weniv'
     ]
 
-    service_mau = {}
+    service = {}
     for name in service_list:
         response = requests.get(f'https://analytics.weniv.co.kr/analytics/pageviews/active_users?url={name}')
 
         if response.status_code == 200:
             # JSON 응답 데이터 파싱
             data = response.json()
-            if 'mau' in data and data['mau']:
-                service_mau[name]=next(iter(data['mau'].values()))
+            if interval=='daily' and 'dau' in data and data['dau']:
+                service[name]=next(iter(data['dau'].values()))
+            elif interval=='weekly' and 'wau' in data and data['wau']:
+                service[name]=next(iter(data['wau'].values()))
+            elif interval=='monthly' and 'mau' in data and data['mau']:
+                service[name]=next(iter(data['mau'].values()))
 
     # 값 기준으로 정렬
-    service_sort = sorted(service_mau.items(), key=lambda x: x[1], reverse=True)
+    service_sort = sorted(service.items(), key=lambda x: x[1], reverse=True)
 
     # 상위 5개 항목 추출
     top5 = service_sort[:5]
 
     top5_list={}
 
-    for service, mau in top5:
-        top5_list[service]=mau
+    for service, interval in top5:
+        top5_list[service]=interval
 
     return top5_list
 
