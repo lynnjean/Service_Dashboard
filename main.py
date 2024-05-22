@@ -649,6 +649,40 @@ async def get_urlcount(
 
     return result
 
+@app.get("/analytics/wenivbooks/tech") # 조회 수 높은 교안
+async def get_techcount(
+        date_start: str,
+        date_end: str,
+        interval: str = "daily",
+        db: SessionLocal = Depends(get_db),
+):
+    start_date, end_date = get_date_range(date_start, date_end, interval)
+
+    wenivbooks_pageviews = (
+        db.query(Pageview.url, func.count(Pageview.url))
+        .filter(
+            Pageview.url.like(f"%books.weniv%"),
+            ~Pageview.url.like(f"%keyword%"),
+            Pageview.timestamp >= start_date,
+            Pageview.timestamp <= end_date.replace(hour=23, minute=59, second=59),
+        )
+        .group_by(Pageview.url)
+        .all()
+    )
+
+    techdict={}
+
+    for url, count in wenivbooks_pageviews:
+        url_parts = url.split('/')[3]
+        if url_parts in techdict:
+            techdict[url_parts] += count
+        else:
+            techdict[url_parts] = count
+    
+    result = {url: count for url, count in techdict.items()}
+
+    return result
+
 # health check
 @app.get("/health")
 def health_check():
