@@ -624,6 +624,31 @@ async def collect_sql(
 
     return {"status": "success", "message": "sql data collected successfully"}
 
+@app.get("/analytics/wenivbooks/url") # 조회 수 높은 페이지
+async def get_urlcount(
+        date_start: str,
+        date_end: str,
+        interval: str = "daily",
+        db: SessionLocal = Depends(get_db),
+):
+    start_date, end_date = get_date_range(date_start, date_end, interval)
+
+    wenivbooks_pageviews = (
+        db.query(Pageview.url, func.count(Pageview.url))
+        .filter(
+            Pageview.url.like(f"%books.weniv%"),
+            ~Pageview.url.like(f"%keyword%"),
+            Pageview.timestamp >= start_date,
+            Pageview.timestamp <= end_date.replace(hour=23, minute=59, second=59),
+        )
+        .group_by(Pageview.url)
+        .all()
+    )
+
+    result = [{'url': url, 'count': count} for url, count in wenivbooks_pageviews]
+
+    return result
+
 # health check
 @app.get("/health")
 def health_check():
