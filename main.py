@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from utils import generate_session_id, get_date_range, KST, reader, logger
 import requests
+from urllib.parse import unquote
 
 app = FastAPI()
 
@@ -683,6 +684,42 @@ async def get_techcount(
 
     return result
 
+@app.get("/analytics/wenivbooks/keyword") # 검색 키워드
+async def get_keyword(
+        date_start: str,
+        date_end: str,
+        interval: str = "daily",
+        db: SessionLocal = Depends(get_db),
+):
+    start_date, end_date = get_date_range(date_start, date_end, interval)
+
+    keyword_pageviews = (
+        db.query(Pageview.url, func.count(Pageview.url))
+        .filter(
+            Pageview.url.like(f"%books.weniv%"),
+            Pageview.url.like(f"%search?keyword%"),
+            Pageview.timestamp >= start_date,
+            Pageview.timestamp <= end_date.replace(hour=23, minute=59, second=59),
+        )
+        .group_by(Pageview.url)
+        .all()
+    )
+
+    keyword_dict={}
+
+    for url, count in keyword_pageviews:
+        keyword = url.split('=')[1]
+        if '%' in keyword:
+            keyword = unquote(keyword, 'utf-8')
+        if keyword in keyword_dict:
+            keyword_dict[keyword] += count
+        else:
+            keyword_dict[keyword] = count
+    
+    result = {keyword: count for keyword, count in keyword_dict.items()}
+
+    return result
+    
 # health check
 @app.get("/health")
 def health_check():
