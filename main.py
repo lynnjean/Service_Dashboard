@@ -9,6 +9,9 @@ from typing import Optional
 from utils import generate_session_id, get_date_range, KST, reader, logger
 import requests
 from urllib.parse import unquote
+import pandas as pd
+import httpx
+import asyncio
 
 app = FastAPI()
 
@@ -468,7 +471,7 @@ async def collect_anchor_click(
 
     return {"status": "success", "message": "Anchor click data collected successfully"}
 
-@app.get("/analytics/anchor-clicks")
+@app.get("/analytics/anchor-clicks") # 다른 컨텐츠 이동 횟수
 async def get_anchor_clicks(
         source_url: str,
         target_url: Optional[str] = None,
@@ -647,6 +650,7 @@ async def get_urlcount(
     )
 
     result = [{'url': url, 'count': count} for url, count in wenivbooks_pageviews]
+    result = sorted(result, key=lambda x: x['count'], reverse=True)[:20]
 
     return result
 
@@ -675,12 +679,19 @@ async def get_techcount(
 
     for url, count in wenivbooks_pageviews:
         url_parts = url.split('/')[3]
-        if url_parts in techdict:
-            techdict[url_parts] += count
-        else:
-            techdict[url_parts] = count
+        if url_parts != "":
+            if '%' in url_parts:
+                url_parts = unquote(url_parts, 'utf-8')
+            if url_parts in techdict:
+                techdict[url_parts]['count'] += count
+                techdict[url_parts]['urls'].append({'url': url, 'count': count})
+            else:
+                techdict[url_parts] = {'count': count, 'urls': [{'url': url, 'count': count}]}
     
-    result = {url: count for url, count in techdict.items()}
+    for url_part in techdict:
+        techdict[url_part]['urls'] = sorted(techdict[url_part]['urls'], key=lambda x: x['count'], reverse=True)
+
+    result = {url_part: {'count': data['count'], 'urls': data['urls']} for url_part, data in techdict.items()}
 
     return result
 
