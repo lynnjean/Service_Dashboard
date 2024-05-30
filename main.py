@@ -736,8 +736,8 @@ async def get_keyword(
 
     return result
 
-@app.post("/wenivai")
-async def wenivai(
+@app.post("/analytics/ai")
+async def analytics_ai(
         request: Request, db: SessionLocal = Depends(get_db)
 ):
     try:
@@ -762,13 +762,28 @@ async def wenivai(
 
         if match:
             sql_text = match.group(1).strip()
-            result = db.execute(text(sql_text)).fetchall()
             query=text(sql_text)
             result = db.execute(query)
             users = result.mappings().all()
             return {'gpt':completion.choices[0].message.content,'sql': sql_text,'result':users}
         else:
-            return {"result":"요청 사항을 다시 작성해주세요.",'gpt':completion.choices[0].message.content}
+            return {"result":"다시 요청 부탁드립니다.",'gpt':completion.choices[0].message.content}
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.post("/analytics/sql")
+async def analytics_sql(
+        request: Request, db: SessionLocal = Depends(get_db)
+):
+    try:
+        body = await request.json()
+        question = body.get("question")
+
+        query=text(question)
+        result = db.execute(query)
+        users = result.mappings().all()
+        return {'result':users}
+
     except Exception as e:
         return {"error": str(e)}
 
