@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request, Depends, Header # , Cookie, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from models import Pageview, AnchorClick, WenivSql, PageviewData, AnchorClickData, WenivSqlData, Base
-from sqlalchemy import create_engine, func
+from sqlalchemy import create_engine, func, text
 from sqlalchemy.orm import sessionmaker
 from user_agents import parse
 from datetime import datetime, timedelta
@@ -12,6 +12,11 @@ from urllib.parse import unquote
 import pandas as pd
 import httpx
 import asyncio
+from openai import OpenAI
+import re
+import json
+from dotenv import load_dotenv
+import os
 
 app = FastAPI()
 
@@ -730,7 +735,43 @@ async def get_keyword(
     result = {keyword: count for keyword, count in keyword_dict.items()}
 
     return result
-    
+
+@app.post("/wenivai")
+async def wenivai(
+        request: Request, db: SessionLocal = Depends(get_db)
+):
+    try:
+        body = await request.json()
+        question = body.get("question")
+
+        # .env 파일의 환경 변수를 로드합니다.
+        load_dotenv()
+
+        OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+        client = OpenAI(api_key=OPENAI_API_KEY)
+
+        completion = client.chat.completions.create(
+            model = 'gpt-3.5-turbo',
+            messages = [
+                {"role":"user","content":question}
+            ]
+        )
+
+        pattern = r'```sql(.*?)```'
+        match = re.search(pattern, completion.choices[0].message.content, re.DOTALL)
+
+        if match:
+            sql_text = match.group(1).strip()
+            result = db.execute(text(sql_text)).fetchall()
+            query=text(sql_text)
+            result = db.execute(query)
+            users = result.mappings().all()
+            return {'gpt':completion.choices[0].message.content,'sql': sql_text,'result':users}
+        else:
+            return {"result":"요청 사항을 다시 작성해주세요.",'gpt':completion.choices[0].message.content}
+    except Exception as e:
+        return {"error": str(e)}
+
 # health check
 @app.get("/health")
 def health_check():
