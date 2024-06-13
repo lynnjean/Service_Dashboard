@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request, Depends, Header # , Cookie, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from models import Pageview, AnchorClick, WenivSql, PageviewData, AnchorClickData, WenivSqlData, Base
 from sqlalchemy import create_engine, func, text
 from sqlalchemy.orm import sessionmaker
@@ -666,7 +667,6 @@ async def get_urlcount(
 
     return result
 
-@app.get("/analytics/wenivbooks/tech") # 조회 수 높은 교안
 async def get_techcount(
         date_start: str,
         date_end: str,
@@ -789,10 +789,20 @@ async def analytics_sql(
         query=text(question)
         result = db.execute(query)
         users = result.mappings().all()
+        file = pd.DataFrame(users)
+        file.to_csv('sql_result.csv')
+        
         return {'result':users}
 
     except Exception as e:
         return {"error": str(e)}
+
+@app.get("/analytics/sql/download")
+async def download_csv():
+    csv_file_path = 'sql_result.csv'
+    if not os.path.exists(csv_file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(csv_file_path, filename='sql_result.csv')
 
 # health check
 @app.get("/health")
