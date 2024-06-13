@@ -790,7 +790,7 @@ async def analytics_sql(
         result = db.execute(query)
         users = result.mappings().all()
         file = pd.DataFrame(users)
-        file.to_csv('sql_result.csv')
+        file.to_csv('sql_result.csv', index=False)
         
         return {'result':users}
 
