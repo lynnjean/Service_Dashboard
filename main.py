@@ -667,6 +667,7 @@ async def get_urlcount(
 
     return result
 
+@app.get("/analytics/wenivbooks/tech") # 조회 수 높은 교안
 async def get_techcount(
         date_start: str,
         date_end: str,
