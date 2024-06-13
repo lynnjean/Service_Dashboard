@@ -368,7 +368,7 @@ async def active_users(
         db.query(func.count(Pageview.session_id.distinct()))
         .filter(
             Pageview.url.like(f"%{url}%"),
-            Pageview.timestamp >= today - timedelta(days=29),
+            Pageview.timestamp >= today - timedelta(days=30),
             Pageview.timestamp < today + timedelta(days=1),
         )
         .scalar()
