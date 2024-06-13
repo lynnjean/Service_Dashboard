@@ -152,6 +152,8 @@ async def get_pageviews(
             },
             "pageviews_by_os": {},
             "pageviews_by_browser": {},
+            f"is_{interval}_time":{},
+            f"is_{interval}_week":{}
         }
 
         # 데이터가 있는 경우에만 처리
@@ -165,7 +167,36 @@ async def get_pageviews(
                 },
                 "pageviews_by_os": {},
                 "pageviews_by_browser": {},
+                f"is_{interval}_time":{},
+                f"is_{interval}_week":{}
             }
+
+            # 시간별 페이지뷰 수 계산
+            for pageview in filtered_pageviews:
+                if (
+                        pageview.timestamp.hour
+                        not in processed_data["data"][date_key][f"is_{interval}_time"]
+                ):
+                    processed_data["data"][date_key][f"is_{interval}_time"][
+                        pageview.timestamp.hour
+                    ] = 0
+                processed_data["data"][date_key][f"is_{interval}_time"][
+                    pageview.timestamp.hour
+                ] += 1
+
+            # 요일별 페이지뷰 수 계산
+            if interval!='daily':
+                for pageview in filtered_pageviews:
+                    if (
+                            pageview.timestamp.strftime("%A")
+                            not in processed_data["data"][date_key][f"is_{interval}_week"]
+                    ):
+                        processed_data["data"][date_key][f"is_{interval}_week"][
+                            pageview.timestamp.strftime("%A")
+                        ] = 0
+                    processed_data["data"][date_key][f"is_{interval}_week"][
+                        pageview.timestamp.strftime("%A")
+                    ] += 1
 
             # 지역별 페이지뷰 수 계산
             for pageview in filtered_pageviews:
@@ -283,6 +314,8 @@ async def get_pageviews_usercount(
             },
             "pageviews_by_os": {},
             "pageviews_by_browser": {},
+            f"is_{interval}_time":{},
+            f"is_{interval}_week":{}
         }
 
         # 데이터가 있는 경우에만 처리
@@ -296,7 +329,36 @@ async def get_pageviews_usercount(
                 },
                 "pageviews_by_os": {},
                 "pageviews_by_browser": {},
+                f"is_{interval}_time":{},
+                f"is_{interval}_week":{}
             }
+
+            # 시간별 페이지뷰 수 계산
+            for pageview in unique_session_pageviews:
+                if (
+                        pageview.timestamp.hour
+                        not in processed_data["data"][date_key][f"is_{interval}_time"]
+                ):
+                    processed_data["data"][date_key][f"is_{interval}_time"][
+                        pageview.timestamp.hour
+                    ] = 0
+                processed_data["data"][date_key][f"is_{interval}_time"][
+                    pageview.timestamp.hour
+                ] += 1
+
+            # 요일별 페이지뷰 수 계산
+            if interval!='daily':
+                for pageview in unique_session_pageviews:
+                    if (
+                            pageview.timestamp.strftime("%A")
+                            not in processed_data["data"][date_key][f"is_{interval}_week"]
+                    ):
+                        processed_data["data"][date_key][f"is_{interval}_week"][
+                            pageview.timestamp.strftime("%A")
+                        ] = 0
+                    processed_data["data"][date_key][f"is_{interval}_week"][
+                        pageview.timestamp.strftime("%A")
+                    ] += 1
 
             # 지역별 페이지뷰 수 계산
             for pageview in unique_session_pageviews:
