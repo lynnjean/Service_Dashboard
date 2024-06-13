@@ -654,8 +654,18 @@ async def get_urlcount(
         .all()
     )
 
-    result = [{'url': url, 'count': count} for url, count in wenivbooks_pageviews]
-    result = sorted(result, key=lambda x: x['count'], reverse=True)[:20]
+    book_list=['sql','github','html-css','basecamp-html-css','basecamp-javascript',
+    'basecamp-network','javascript','python','wenivworld','wenivworld-teacher']
+        
+    df = pd.DataFrame(wenivbooks_pageviews, columns=['url', 'count'])
+    try:
+        df['url_split'] = df['url'].apply(lambda x: x.split('/')[3] if len(x.split('/')) > 3 else None)
+    except IndexError:
+        pass    
+    df = df[df['url_split'].isin(book_list)]
+    df.drop(columns=['url_split'], inplace=True)
+    df = df.sort_values(by='count', ascending=False)
+    result = df[:20].to_dict('records')
 
     return result
 
