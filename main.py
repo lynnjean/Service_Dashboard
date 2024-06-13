@@ -420,14 +420,9 @@ def pageview_top5(
     service_sort = sorted(service.items(), key=lambda x: x[1], reverse=True)
 
     # 상위 5개 항목 추출
-    top5 = service_sort[:5]
+    top5 = dict(service_sort[:5])
 
-    top5_list={}
-
-    for service, interval in top5:
-        top5_list[service]=interval
-
-    return top5_list
+    return top5
 
 @app.post("/collect/anchor-click")
 async def collect_anchor_click(
