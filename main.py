@@ -638,6 +638,7 @@ async def get_urlcount(
         date_start: str,
         date_end: str,
         interval: str = "daily",
+        book: str="",
         db: SessionLocal = Depends(get_db),
 ):
     start_date, end_date = get_date_range(date_start, date_end, interval)
@@ -646,6 +647,7 @@ async def get_urlcount(
         db.query(Pageview.url, func.count(Pageview.url))
         .filter(
             Pageview.url.like(f"%books.weniv%"),
+            Pageview.url.like(f"%{book}%"),
             ~Pageview.url.like(f"%keyword%"),
             Pageview.timestamp >= start_date,
             Pageview.timestamp <= end_date.replace(hour=23, minute=59, second=59),
