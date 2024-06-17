@@ -750,23 +750,19 @@ async def get_techcount(
         .all()
     )
 
-    techdict={}
+    book_list=['sql','github','html-css','basecamp-html-css','basecamp-javascript',
+    'basecamp-network','javascript','python','wenivworld','wenivworld-teacher']
+        
+    df = pd.DataFrame(wenivbooks_pageviews, columns=['url', 'count'])
+    try:
+        df['url_split'] = df['url'].apply(lambda x: x.split('/')[3] if len(x.split('/')) > 3 else None)
+    except IndexError:
+        pass    
 
-    for url, count in wenivbooks_pageviews:
-        url_parts = url.split('/')[3]
-        if url_parts != "":
-            if '%' in url_parts:
-                url_parts = unquote(url_parts, 'utf-8')
-            if url_parts in techdict:
-                techdict[url_parts]['count'] += count
-                techdict[url_parts]['urls'].append({'url': url, 'count': count})
-            else:
-                techdict[url_parts] = {'count': count, 'urls': [{'url': url, 'count': count}]}
-    
-    for url_part in techdict:
-        techdict[url_part]['urls'] = sorted(techdict[url_part]['urls'], key=lambda x: x['count'], reverse=True)
-
-    result = {url_part: {'count': data['count'], 'urls': data['urls']} for url_part, data in techdict.items()}
+    df = df[df['url_split'].isin(book_list)]
+    df['url'] = df['url'].apply(lambda x: unquote(x, 'utf-8') if '%' in x else x)
+    grouped_df = df.groupby('url_split')['count'].sum().reset_index()
+    result = grouped_df.set_index('url_split').T.to_dict('records')
 
     return result
 
