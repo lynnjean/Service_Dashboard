@@ -715,7 +715,7 @@ async def get_urlcount(
     )
 
     book_list=['sql','github','html-css','basecamp-html-css','basecamp-javascript',
-    'basecamp-network','javascript','python','wenivworld','wenivworld-teacher']
+    'basecamp-network','javascript','python','wenivworld','wenivworld-teacher', 'basecamp-sql', 'figma-serenade']
         
     df = pd.DataFrame(wenivbooks_pageviews, columns=['url', 'count'])
     try:
@@ -751,7 +751,7 @@ async def get_techcount(
     )
 
     book_list=['sql','github','html-css','basecamp-html-css','basecamp-javascript',
-    'basecamp-network','javascript','python','wenivworld','wenivworld-teacher']
+    'basecamp-network','javascript','python','wenivworld','wenivworld-teacher', 'basecamp-sql', 'figma-serenade']
         
     df = pd.DataFrame(wenivbooks_pageviews, columns=['url', 'count'])
     try:
