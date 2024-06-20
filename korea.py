@@ -23,7 +23,8 @@ seoul = [
     "Dobong-gu",
     "Geumcheon-gu",
     "Gangbuk-gu",
-    "Kayang-dong",   
+    "Kayang-dong",
+    "Banpobondong",   
 ]
 busan = [
     "Busan",
