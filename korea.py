@@ -116,6 +116,7 @@ jeonnam=[
     "Yeongam-gun",
     "Yeonggwang-gun",
     "Suncheon",
+    "Gwangyang",
 ]
 gb = [
     "Uiryeong-gun",
