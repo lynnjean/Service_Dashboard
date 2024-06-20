@@ -174,7 +174,7 @@ async def get_pageviews_usercount(
         w = pd.Series(0,index=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"])
         weeks = pageviews_df['timestamp'].dt.strftime("%A").value_counts().sort_index()
         weekday = pd.to_datetime(all_dates_df['date']).dt.strftime("%A").value_counts().sort_index().replace(0, 1)
-        co_week = pd.concat([w, weeks/weekday]).to_dict()
+        co_week = pd.concat([w, weeks])/weekday
 
         pageviews_df['country'] = pageviews_df['location'].str.split(', ').str[1]
         country = pageviews_df['country'].value_counts().sort_values(ascending=False).to_dict()
@@ -200,7 +200,7 @@ async def get_pageviews_usercount(
         processed_data['pageviews_by_location']['city']['Unknown'] = regions_unknown
         processed_data['pageviews_by_browser'] = {browser: count for browser, count in browser.items()}
         processed_data['daily_time'] = {time: round(count/int(len(all_dates)),2) for time, count in co_time.items()}
-        processed_data[f'is_{interval}_week'] = co_week
+        processed_data[f'is_{interval}_week'] = co_week.to_dict()
     else:
         processed_data['total_pageviews'] = 0
         pageviews = all_dates_df.copy()
@@ -292,7 +292,7 @@ async def get_pageviews_usercount(
         w = pd.Series(0,index=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"])
         weeks = session_df['timestamp'].dt.strftime("%A").value_counts().sort_index()
         weekday = pd.to_datetime(all_dates_df['date']).dt.strftime("%A").value_counts().sort_index().replace(0, 1)
-        co_week = pd.concat([w, weeks/weekday]).to_dict()
+        co_week = pd.concat([w, weeks])/weekday
 
         session_df['country'] = session_df['location'].str.split(', ').str[1]
         country = session_df['country'].value_counts().sort_values(ascending=False).to_dict()
@@ -318,7 +318,7 @@ async def get_pageviews_usercount(
         processed_data['pageviews_by_location']['city']['Unknown'] = regions_unknown
         processed_data['pageviews_by_browser'] = {browser: count for browser, count in browser.items()}
         processed_data['daily_time'] = {time: round(count/int(len(all_dates)),2) for time, count in co_time.items()}
-        processed_data[f'is_{interval}_week'] = co_week
+        processed_data[f'is_{interval}_week'] = co_week.to_dict()
     else:
         processed_data['total_pageviews'] = 0
         pageviews = all_dates_df.copy()
