@@ -18,6 +18,8 @@ import re
 import json
 from dotenv import load_dotenv
 import os
+import polars as pl
+import korea
 
 app = FastAPI()
 
@@ -95,7 +97,7 @@ async def collect_pageview(
     return {"status": "success", "message": "Pageview data collected successfully", "session_id":session_id, "referer_url":referer}
 
 @app.get("/analytics/pageviews") # 접속횟수, 날짜 필터링
-async def get_pageviews(
+async def get_pageviews_usercount(
         url: str,
         date_start: str,
         date_end: str,
@@ -114,127 +116,97 @@ async def get_pageviews(
         .all()
     )
 
-    # 데이터 가공
     processed_data = {
-        "total_pageviews": len(pageviews),
-        "data": {},
+        "total_pageviews": {},
+        "num": {},
+        "pageviews_by_device":{},
+        "pageviews_by_os":{},
+        "pageviews_by_location": {},
+        "pageviews_by_browser": {},
+        "daily_time":{},
+        f"is_{interval}_week":{}
     }
 
-    # 일일, 주간, 월간별 데이터 계산
-    current_date = start_date
-    while current_date <= end_date:
-        if interval == "daily":
-            next_date = current_date + timedelta(days=1)
-        elif interval == "weekly":
-            next_date = current_date + timedelta(days=7)
-        elif interval == "monthly":
-            next_date = current_date.replace(day=28) + timedelta(days=4)
-            next_date = next_date.replace(day=1)
+    all_dates = pd.date_range(start=start_date, end=end_date, freq='D')
+    all_dates_df = pd.DataFrame(all_dates, columns=['date'])    
+    all_dates_df['date'] = all_dates_df['date'].dt.strftime('%Y%m%d')
 
-        filtered_pageviews = [
-            p for p in pageviews if current_date <= p.timestamp < next_date
-        ]
+    if pageviews:
+        pageviews_df = pd.DataFrame(
+            [
+                {
+                    "timestamp": p.timestamp, 
+                    "session_id": p.session_id,
+                    "is_mobile":p.is_mobile,
+                    "is_pc":p.is_pc,
+                    "os": parse(p.user_agent).os.family,
+                    "location":p.user_location,
+                    "browser": parse(p.user_agent).browser.family,
+                } for p in pageviews],
+        )
 
-        if interval == "daily":
-            date_key = current_date.strftime("%Y%m%d")
-        elif interval == "weekly":
-            date_key = f"{current_date.strftime('%Y%m%d')}-{(next_date - timedelta(days=1)).strftime('%Y%m%d')}"
-        elif interval == "monthly":
-            date_key = current_date.strftime("%Y%m")
+        processed_data['total_pageviews'] = len(pageviews_df['timestamp'])
+        pageviews_df['date']=pageviews_df['timestamp'].dt.strftime('%Y%m%d')
+        merged_df = all_dates_df.merge(pageviews_df, on='date', how='left')
 
-        # 기본 구조 생성
-        processed_data["data"][date_key] = {
-            "num": 0,
-            "pageviews_by_location": {},
-            "pageviews_by_device": {
-                "mobile": 0,
-                "pc": 0,
-            },
-            "pageviews_by_os": {},
-            "pageviews_by_browser": {},
-            f"is_{interval}_time":{},
-            f"is_{interval}_week":{}
-        }
+        if interval == "daily": 
+            pageviews = merged_df.groupby('date').agg(session_count=('session_id', 'count')).reset_index()
+        elif interval == "weekly" or interval == "monthly":
+            merged_df['date'] = pd.to_datetime(merged_df['date'])
+            merged_df = merged_df.set_index('date')
+            if interval == "weekly":
+                pageviews = merged_df.resample('W').agg(session_count=('session_id', 'count')).reset_index()
+                pageviews['date'] = (pageviews['date'] + pd.DateOffset(days=-6)).dt.strftime('%Y%m%d') + '-' + pageviews['date'].dt.strftime('%Y%m%d')
+            elif interval == "monthly":
+                pageviews = merged_df.resample('M').agg(session_count=('session_id', 'count')).reset_index()
+                pageviews['date'] = pageviews['date'].dt.strftime('%Y%m') 
+        
+        pc = pageviews_df[['is_pc']].sum()
+        mobile = pageviews_df[['is_mobile']].sum()
 
-        # 데이터가 있는 경우에만 처리
-        if filtered_pageviews:
-            processed_data["data"][date_key] = {
-                "num": len(filtered_pageviews),
-                "pageviews_by_location": {},
-                "pageviews_by_device": {
-                    "mobile": sum(p.is_mobile for p in filtered_pageviews),
-                    "pc": sum(p.is_pc for p in filtered_pageviews),
-                },
-                "pageviews_by_os": {},
-                "pageviews_by_browser": {},
-                f"is_{interval}_time":{},
-                f"is_{interval}_week":{}
-            }
+        os = pageviews_df['os'].value_counts().sort_values(ascending=False).to_dict()
+        browser = pageviews_df['browser'].value_counts().sort_values(ascending=False).to_dict()
 
-            # 시간별 페이지뷰 수 계산
-            for pageview in filtered_pageviews:
-                if (
-                        pageview.timestamp.hour
-                        not in processed_data["data"][date_key][f"is_{interval}_time"]
-                ):
-                    processed_data["data"][date_key][f"is_{interval}_time"][
-                        pageview.timestamp.hour
-                    ] = 0
-                processed_data["data"][date_key][f"is_{interval}_time"][
-                    pageview.timestamp.hour
-                ] += 1
+        t = pd.Series(0,index=list(range(0,24)))
+        times = pageviews_df['timestamp'].dt.hour.value_counts().sort_index()
+        co_time = pd.concat([t, times]).to_dict()
 
-            # 요일별 페이지뷰 수 계산
-            if interval!='daily':
-                for pageview in filtered_pageviews:
-                    if (
-                            pageview.timestamp.strftime("%A")
-                            not in processed_data["data"][date_key][f"is_{interval}_week"]
-                    ):
-                        processed_data["data"][date_key][f"is_{interval}_week"][
-                            pageview.timestamp.strftime("%A")
-                        ] = 0
-                    processed_data["data"][date_key][f"is_{interval}_week"][
-                        pageview.timestamp.strftime("%A")
-                    ] += 1
+        w = pd.Series(0,index=["Monday","Thursday","Wednesday","Tuesday","Friday","Saturday","Sunday"])
+        weeks = pageviews_df['timestamp'].dt.strftime("%A").value_counts().sort_index()
+        co_week = pd.concat([w, weeks]).to_dict()
 
-            # 지역별 페이지뷰 수 계산
-            for pageview in filtered_pageviews:
-                if (
-                        pageview.user_location
-                        not in processed_data["data"][date_key]["pageviews_by_location"]
-                ):
-                    processed_data["data"][date_key]["pageviews_by_location"][
-                        pageview.user_location
-                    ] = 0
-                processed_data["data"][date_key]["pageviews_by_location"][
-                    pageview.user_location
-                ] += 1
+        pageviews_df['country'] = pageviews_df['location'].str.split(', ').str[1]
+        country = pageviews_df['country'].value_counts().sort_values(ascending=False).to_dict()
 
-            # OS별 페이지뷰 수 계산
-            for pageview in filtered_pageviews:
-                user_agent = parse(pageview.user_agent)
-                os_family = user_agent.os.family
-                if os_family not in processed_data["data"][date_key]["pageviews_by_os"]:
-                    processed_data["data"][date_key]["pageviews_by_os"][os_family] = 0
-                processed_data["data"][date_key]["pageviews_by_os"][os_family] += 1
+        korea_df=pageviews_df[pageviews_df['country']=='South Korea']
+        korea_df['city'] = korea_df['location'].str.split(', ').str[0]
+        city = korea_df['city'].value_counts().reset_index()
+        
+        def find_location(city):
+            for key, value in korea.location_dict.items():
+                if city in value:
+                    return key
+            return 'Unknown'
 
-            # 브라우저별 페이지뷰 수 계산
-            for pageview in filtered_pageviews:
-                user_agent = parse(pageview.user_agent)
-                browser_family = user_agent.browser.family
-                if (
-                        browser_family
-                        not in processed_data["data"][date_key]["pageviews_by_browser"]
-                ):
-                    processed_data["data"][date_key]["pageviews_by_browser"][
-                        browser_family
-                    ] = 0
-                processed_data["data"][date_key]["pageviews_by_browser"][
-                    browser_family
-                ] += 1
+        city['region'] = city['city'].apply(find_location)
+        city = city['region'].value_counts().sort_values(ascending=False).to_dict()
 
-        current_date = next_date
+        processed_data['pageviews_by_device'] = {'pc':int(pc),'mobile':int(mobile)}
+        processed_data['pageviews_by_os'] = {os: count for os, count in os.items()}
+        processed_data['pageviews_by_location']['country'] = country
+        processed_data['pageviews_by_location']['city'] = city
+        processed_data['pageviews_by_browser'] = {browser: count for browser, count in browser.items()}
+        processed_data['daily_time'] = {time: count for time, count in co_time.items()}
+        processed_data[f'is_{interval}_week'] = {week: count for week, count in co_week.items()}
+    else:
+        processed_data['total_pageviews'] = 0
+        pageviews = all_dates_df.copy()
+        pageviews['session_count'] = 0
+    
+    processed_data['num'] = {row['date']: row['session_count'] for _, row in pageviews.iterrows()}
+    processed_data['num']['min'] = int(pageviews['session_count'].min())
+    processed_data['num']['max'] = int(pageviews['session_count'].max())
+    processed_data['num']['avg'] = int(pageviews['session_count'].mean())
 
     return processed_data
 
@@ -258,145 +230,98 @@ async def get_pageviews_usercount(
         .all()
     )
 
-    session_pageviews = (
-        db.query(Pageview.session_id.distinct())
-        .filter(
-            Pageview.url.like(f"%{url}%"),
-            Pageview.timestamp >= start_date,
-            Pageview.timestamp <= end_date.replace(hour=23, minute=59, second=59),
-        )
-        .all()
-    )
-
-    # 데이터 가공
     processed_data = {
-        "total_pageviews": len(session_pageviews),
-        "data": {},
+        "total_pageviews": {},
+        "num": {},
+        "pageviews_by_device":{},
+        "pageviews_by_os":{},
+        "pageviews_by_location": {},
+        "pageviews_by_browser": {},
+        "daily_time":{},
+        f"is_{interval}_week":{}
     }
 
-    # 일일, 주간, 월간별 데이터 계산
-    current_date = start_date
-    while current_date <= end_date:
-        if interval == "daily":
-            next_date = current_date + timedelta(days=1)
-        elif interval == "weekly":
-            next_date = current_date + timedelta(days=7)
-        elif interval == "monthly":
-            next_date = current_date.replace(day=28) + timedelta(days=4)
-            next_date = next_date.replace(day=1)
+    all_dates = pd.date_range(start=start_date, end=end_date, freq='D')
+    all_dates_df = pd.DataFrame(all_dates, columns=['date'])    
+    all_dates_df['date'] = all_dates_df['date'].dt.strftime('%Y%m%d')
 
-        filtered_pageviews = [
-            p for p in pageviews if current_date <= p.timestamp < next_date
-        ]
+    if pageviews:
+        pageviews_df = pd.DataFrame(
+            [
+                {
+                    "timestamp": p.timestamp, 
+                    "session_id": p.session_id,
+                    "is_mobile":p.is_mobile,
+                    "is_pc":p.is_pc,
+                    "os": parse(p.user_agent).os.family,
+                    "location":p.user_location,
+                    "browser": parse(p.user_agent).browser.family,
+                } for p in pageviews],
+        )
 
-        # session_id 중복 제거
-        unique_session_pageviews = []
-        seen_sessions = set()
-        for p in filtered_pageviews:
-            if p.session_id not in seen_sessions:
-                unique_session_pageviews.append(p)
-                seen_sessions.add(p.session_id)
+        processed_data['total_pageviews'] = len(pageviews_df["session_id"].unique())
+        pageviews_df['date']=pageviews_df['timestamp'].dt.strftime('%Y%m%d')
+        merged_df = all_dates_df.merge(pageviews_df, on='date', how='left')
 
-        if interval == "daily":
-            date_key = current_date.strftime("%Y%m%d")
-        elif interval == "weekly":
-            date_key = f"{current_date.strftime('%Y%m%d')}-{(next_date - timedelta(days=1)).strftime('%Y%m%d')}"
-        elif interval == "monthly":
-            date_key = current_date.strftime("%Y%m")
+        if interval == "daily": 
+            pageviews = merged_df.groupby('date').agg(session_count=('session_id', 'nunique')).reset_index()
+        elif interval == "weekly" or interval == "monthly":
+            merged_df['date'] = pd.to_datetime(merged_df['date'])
+            merged_df = merged_df.set_index('date')
+            if interval == "weekly":
+                pageviews = merged_df.resample('W').agg(session_count=('session_id', 'nunique')).reset_index()
+                pageviews['date'] = (pageviews['date'] + pd.DateOffset(days=-6)).dt.strftime('%Y%m%d') + '-' + pageviews['date'].dt.strftime('%Y%m%d')
+            elif interval == "monthly":
+                pageviews = merged_df.resample('M').agg(session_count=('session_id', 'nunique')).reset_index()
+                pageviews['date'] = pageviews['date'].dt.strftime('%Y%m') 
+        
+        session_df = pageviews_df.drop_duplicates(subset=['session_id'])
+        pc = session_df[['is_pc']].sum()
+        mobile = session_df[['is_mobile']].sum()
 
-        # 기본 구조 생성
-        processed_data["data"][date_key] = {
-            "num": 0,
-            "pageviews_by_location": {},
-            "pageviews_by_device": {
-                "mobile": 0,
-                "pc": 0,
-            },
-            "pageviews_by_os": {},
-            "pageviews_by_browser": {},
-            f"is_{interval}_time":{},
-            f"is_{interval}_week":{}
-        }
+        os = session_df['os'].value_counts().sort_values(ascending=False).to_dict()
+        browser = session_df['browser'].value_counts().sort_values(ascending=False).to_dict()
 
-        # 데이터가 있는 경우에만 처리
-        if unique_session_pageviews:
-            processed_data["data"][date_key] = {
-                "num": len(unique_session_pageviews),
-                "pageviews_by_location": {},
-                "pageviews_by_device": {
-                    "mobile": sum(p.is_mobile for p in unique_session_pageviews),
-                    "pc": sum(p.is_pc for p in unique_session_pageviews),
-                },
-                "pageviews_by_os": {},
-                "pageviews_by_browser": {},
-                f"is_{interval}_time":{},
-                f"is_{interval}_week":{}
-            }
+        t = pd.Series(0,index=list(range(0,24)))
+        times = session_df['timestamp'].dt.hour.value_counts().sort_index()
+        co_time = pd.concat([t, times]).to_dict()
 
-            # 시간별 페이지뷰 수 계산
-            for pageview in unique_session_pageviews:
-                if (
-                        pageview.timestamp.hour
-                        not in processed_data["data"][date_key][f"is_{interval}_time"]
-                ):
-                    processed_data["data"][date_key][f"is_{interval}_time"][
-                        pageview.timestamp.hour
-                    ] = 0
-                processed_data["data"][date_key][f"is_{interval}_time"][
-                    pageview.timestamp.hour
-                ] += 1
+        w = pd.Series(0,index=["Monday","Thursday","Wednesday","Tuesday","Friday","Saturday","Sunday"])
+        weeks = session_df['timestamp'].dt.strftime("%A").value_counts().sort_index()
+        co_week = pd.concat([w, weeks]).to_dict()
 
-            # 요일별 페이지뷰 수 계산
-            if interval!='daily':
-                for pageview in unique_session_pageviews:
-                    if (
-                            pageview.timestamp.strftime("%A")
-                            not in processed_data["data"][date_key][f"is_{interval}_week"]
-                    ):
-                        processed_data["data"][date_key][f"is_{interval}_week"][
-                            pageview.timestamp.strftime("%A")
-                        ] = 0
-                    processed_data["data"][date_key][f"is_{interval}_week"][
-                        pageview.timestamp.strftime("%A")
-                    ] += 1
+        session_df['country'] = session_df['location'].str.split(', ').str[1]
+        country = session_df['country'].value_counts().sort_values(ascending=False).to_dict()
 
-            # 지역별 페이지뷰 수 계산
-            for pageview in unique_session_pageviews:
-                if (
-                        pageview.user_location
-                        not in processed_data["data"][date_key]["pageviews_by_location"]
-                ):
-                    processed_data["data"][date_key]["pageviews_by_location"][
-                        pageview.user_location
-                    ] = 0
-                processed_data["data"][date_key]["pageviews_by_location"][
-                    pageview.user_location
-                ] += 1
+        korea_df=session_df[session_df['country']=='South Korea']
+        korea_df['city'] = korea_df['location'].str.split(', ').str[0]
+        city = korea_df['city'].value_counts().reset_index()
+        
+        def find_location(city):
+            for key, value in korea.location_dict.items():
+                if city in value:
+                    return key
+            return 'Unknown'
 
-            # OS별 페이지뷰 수 계산
-            for pageview in unique_session_pageviews:
-                user_agent = parse(pageview.user_agent)
-                os_family = user_agent.os.family
-                if os_family not in processed_data["data"][date_key]["pageviews_by_os"]:
-                    processed_data["data"][date_key]["pageviews_by_os"][os_family] = 0
-                processed_data["data"][date_key]["pageviews_by_os"][os_family] += 1
+        city['region'] = city['city'].apply(find_location)
+        city = city['region'].value_counts().sort_values(ascending=False).to_dict()
 
-            # 브라우저별 페이지뷰 수 계산
-            for pageview in unique_session_pageviews:
-                user_agent = parse(pageview.user_agent)
-                browser_family = user_agent.browser.family
-                if (
-                        browser_family
-                        not in processed_data["data"][date_key]["pageviews_by_browser"]
-                ):
-                    processed_data["data"][date_key]["pageviews_by_browser"][
-                        browser_family
-                    ] = 0
-                processed_data["data"][date_key]["pageviews_by_browser"][
-                    browser_family
-                ] += 1
-
-        current_date = next_date
+        processed_data['pageviews_by_device'] = {'pc':int(pc),'mobile':int(mobile)}
+        processed_data['pageviews_by_os'] = {os: count for os, count in os.items()}
+        processed_data['pageviews_by_location']['country'] = country
+        processed_data['pageviews_by_location']['city'] = city
+        processed_data['pageviews_by_browser'] = {browser: count for browser, count in browser.items()}
+        processed_data['daily_time'] = {time: count for time, count in co_time.items()}
+        processed_data[f'is_{interval}_week'] = {week: count for week, count in co_week.items()}
+    else:
+        processed_data['total_pageviews'] = 0
+        pageviews = all_dates_df.copy()
+        pageviews['session_count'] = 0
+    
+    processed_data['num'] = {row['date']: row['session_count'] for _, row in pageviews.iterrows()}
+    processed_data['num']['min'] = int(pageviews['session_count'].min())
+    processed_data['num']['max'] = int(pageviews['session_count'].max())
+    processed_data['num']['avg'] = int(pageviews['session_count'].mean())
 
     return processed_data
 
