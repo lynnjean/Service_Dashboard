@@ -189,12 +189,14 @@ async def get_pageviews_usercount(
             return 'Unknown'
 
         city['region'] = city['city'].apply(find_location)
-        city = city['region'].value_counts().sort_values(ascending=False).to_dict()
+        regions = city['region'].value_counts().sort_values(ascending=False).to_dict()
+        regions_unknown = city[city['region']=='Unknown'][['city','count']].set_index('city').to_dict()
 
         processed_data['pageviews_by_device'] = {'pc':int(pc),'mobile':int(mobile)}
         processed_data['pageviews_by_os'] = {os: count for os, count in os.items()}
         processed_data['pageviews_by_location']['country'] = country
-        processed_data['pageviews_by_location']['city'] = city
+        processed_data['pageviews_by_location']['city'] = regions
+        processed_data['pageviews_by_location']['city']['Unknown'] = regions_unknown
         processed_data['pageviews_by_browser'] = {browser: count for browser, count in browser.items()}
         processed_data['daily_time'] = {time: count for time, count in co_time.items()}
         processed_data[f'is_{interval}_week'] = {week: count for week, count in co_week.items()}
@@ -304,12 +306,14 @@ async def get_pageviews_usercount(
             return 'Unknown'
 
         city['region'] = city['city'].apply(find_location)
-        city = city['region'].value_counts().sort_values(ascending=False).to_dict()
+        regions = city['region'].value_counts().sort_values(ascending=False).to_dict()
+        regions_unknown = city[city['region']=='Unknown'][['city','count']].set_index('city').to_dict()
 
         processed_data['pageviews_by_device'] = {'pc':int(pc),'mobile':int(mobile)}
         processed_data['pageviews_by_os'] = {os: count for os, count in os.items()}
         processed_data['pageviews_by_location']['country'] = country
-        processed_data['pageviews_by_location']['city'] = city
+        processed_data['pageviews_by_location']['city'] = regions
+        processed_data['pageviews_by_location']['city']['Unknown'] = regions_unknown
         processed_data['pageviews_by_browser'] = {browser: count for browser, count in browser.items()}
         processed_data['daily_time'] = {time: count for time, count in co_time.items()}
         processed_data[f'is_{interval}_week'] = {week: count for week, count in co_week.items()}
