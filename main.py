@@ -168,13 +168,35 @@ async def get_pageviews_usercount(
         browser = pageviews_df['browser'].value_counts().sort_values(ascending=False).to_dict()
 
         t = pd.Series(0,index=list(range(0,24)))
-        times = pageviews_df['timestamp'].dt.hour.value_counts().sort_index()
-        co_time = pd.concat([t, times]).to_dict()
-
         w = pd.Series(0,index=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"])
-        weeks = pageviews_df['timestamp'].dt.strftime("%A").value_counts().sort_index()
+ 
+        pageviews_df['time'] = pageviews_df['timestamp'].dt.hour
+        pageviews_df['weekday'] = pageviews_df['timestamp'].dt.strftime("%A")
+        
+        times = pageviews_df['time'].value_counts().sort_index()
+        weeks = pageviews_df['weekday'].value_counts().sort_index()
+
         weekday = pd.to_datetime(all_dates_df['date']).dt.strftime("%A").value_counts().sort_index().replace(0, 1)
-        co_week = pd.concat([w, weeks])/weekday
+
+        co_time = pd.concat([t, times]).to_dict()
+        co_week = pd.concat([w, weeks])
+        co_weekday = pd.concat([w, weekday])
+        co_week = (co_week/co_weekday).fillna(0)
+        co_week = round(co_week,2)
+
+        co_week_time = pageviews_df.groupby(['weekday','time'])['timestamp'].count().reset_index()
+        result = {}
+
+        num=co_weekday.fillna(1).to_dict()
+        for name, group in co_week_time.groupby('weekday'):
+            if name not in result:
+                result[name] = {}
+            for hour in range(24):
+                hour_data = group[group['time'] == hour]
+                if not hour_data.empty:
+                    result[name][hour] = int(hour_data['timestamp'].values[0])/num[name]
+                else:
+                    result[name][hour] = 0
 
         pageviews_df['country'] = pageviews_df['location'].str.split(', ').str[1]
         country = pageviews_df['country'].value_counts().sort_values(ascending=False).to_dict()
@@ -201,6 +223,7 @@ async def get_pageviews_usercount(
         processed_data['pageviews_by_browser'] = {browser: count for browser, count in browser.items()}
         processed_data['daily_time'] = {time: round(count/int(len(all_dates)),2) for time, count in co_time.items()}
         processed_data[f'is_{interval}_week'] = co_week.to_dict()
+        processed_data[f'is_{interval}_week_time'] = result
     else:
         processed_data['total_pageviews'] = 0
         pageviews = all_dates_df.copy()
@@ -286,14 +309,35 @@ async def get_pageviews_usercount(
         browser = session_df['browser'].value_counts().sort_values(ascending=False).to_dict()
 
         t = pd.Series(0,index=list(range(0,24)))
-        times = session_df['timestamp'].dt.hour.value_counts().sort_index()
-        co_time = pd.concat([t, times]).to_dict()
-
         w = pd.Series(0,index=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"])
-        weeks = session_df['timestamp'].dt.strftime("%A").value_counts().sort_index()
-        weekday = pd.to_datetime(all_dates_df['date']).dt.strftime("%A").value_counts().sort_index().replace(0, 1)
-        co_week = pd.concat([w, weeks])/weekday
+ 
+        session_df['time'] = session_df['timestamp'].dt.hour
+        session_df['weekday'] = session_df['timestamp'].dt.strftime("%A")
+        
+        times = session_df['time'].value_counts().sort_index()
+        weeks = session_df['weekday'].value_counts().sort_index()
 
+        weekday = pd.to_datetime(all_dates_df['date']).dt.strftime("%A").value_counts().sort_index().replace(0, 1)
+
+        co_time = pd.concat([t, times]).to_dict()
+        co_week = pd.concat([w, weeks])
+        co_weekday = pd.concat([w, weekday])
+        co_week = (co_week/co_weekday).fillna(0)
+        co_week = round(co_week,2)
+        co_week_time = session_df.groupby(['weekday','time'])['timestamp'].count().reset_index()
+        result = {}
+
+        num=co_weekday.fillna(1).to_dict()
+        for name, group in co_week_time.groupby('weekday'):
+            if name not in result:
+                result[name] = {}
+            for hour in range(24):
+                hour_data = group[group['time'] == hour]
+                if not hour_data.empty:
+                    result[name][hour] = int(hour_data['timestamp'].values[0])/num[name]
+                else:
+                    result[name][hour] = 0
+            
         session_df['country'] = session_df['location'].str.split(', ').str[1]
         country = session_df['country'].value_counts().sort_values(ascending=False).to_dict()
 
@@ -319,6 +363,7 @@ async def get_pageviews_usercount(
         processed_data['pageviews_by_browser'] = {browser: count for browser, count in browser.items()}
         processed_data['daily_time'] = {time: round(count/int(len(all_dates)),2) for time, count in co_time.items()}
         processed_data[f'is_{interval}_week'] = co_week.to_dict()
+        processed_data[f'is_{interval}_week_time'] = result
     else:
         processed_data['total_pageviews'] = 0
         pageviews = all_dates_df.copy()
