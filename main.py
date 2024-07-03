@@ -376,6 +376,36 @@ async def get_pageviews_usercount(
 
     return processed_data
 
+@app.get("/analytics/pageviews/usercount/weniv") # 접속자수, 날짜 필터링
+def get_pageviews_usercount(
+        date_start: str,
+        date_end: str,
+        interval: str = "daily",
+):
+    start_date, end_date = get_date_range(date_start, date_end, interval)
+
+    service_list = [
+        'books.weniv',
+        'weniv.link',
+        'world.weniv',
+        'sql.weniv',
+        'notebook.weniv'
+    ]
+
+    service = {}
+    for name in service_list:
+        response = requests.get(f'https://analytics.weniv.co.kr/analytics/pageviews/usercount?url={name}&date_start={date_start}&date_end={date_end}&interval={interval}')
+
+        if response.status_code == 200:
+            # JSON 응답 데이터 파싱
+            data = response.json()
+            service[name] = {
+                'total_pageviews': data['total_pageviews'],
+                'daily_data': data['num']
+            }
+
+    return service
+
 @app.get('/analytics/pageviews/active_users') # 활성화 유저 수(dau, wau, mau)
 async def active_users(
         url: str,
